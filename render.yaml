@@ -11,3 +11,5 @@ services:
         sync: false
       - key: VITE_SUPABASE_STORAGE_BUCKET
         value: survey-photos
+      - key: VITE_ADMIN_PIN
+        sync: false

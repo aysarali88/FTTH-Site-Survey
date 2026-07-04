@@ -109,7 +109,8 @@ h2 {
 .actions,
 .tabs,
 .mapControls,
-.recordsHeader {
+.recordsHeader,
+.adminFilters {
   align-items: center;
   display: flex;
   gap: 10px;
@@ -221,6 +222,16 @@ button:disabled {
   padding: 12px 14px;
 }
 
+.adminFilters {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr)) minmax(240px, 1.2fr);
+  margin-bottom: 14px;
+  padding: 14px;
+}
+
 .workspace {
   display: grid;
   gap: 16px;
@@ -255,12 +266,6 @@ button:disabled {
   height: 100%;
   min-height: 640px;
   width: 100%;
-}
-
-.mapShell .leaflet-map-pane {
-  rotate: var(--map-rotation, 0deg);
-  scale: 1.35;
-  transform-origin: 50% 50%;
 }
 
 .fixedPin {
@@ -305,48 +310,6 @@ button:disabled {
   min-height: 38px;
 }
 
-.rotationControls {
-  align-items: center;
-  display: flex;
-  gap: 6px;
-}
-
-.rotationSlider {
-  align-items: center;
-  background: #ffffff;
-  border: 1px solid #dbe4ef;
-  border-radius: 8px;
-  display: flex;
-  gap: 8px;
-  min-height: 38px;
-  padding: 6px 10px;
-  width: 100%;
-}
-
-.rotationSlider span {
-  color: #334155;
-  font-size: 12px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.rotationSlider input {
-  accent-color: #0f172a;
-  border: 0;
-  box-shadow: none;
-  min-height: auto;
-  padding: 0;
-  width: min(260px, 45vw);
-}
-
-.rotationSlider strong {
-  color: #0f172a;
-  direction: ltr;
-  font-size: 12px;
-  min-width: 38px;
-  text-align: center;
-}
-
 .mapControls span {
   color: #334155;
   font-size: 13px;
@@ -380,6 +343,68 @@ button:disabled {
 
 .drawerTabs {
   display: none;
+}
+
+.surveyMarker {
+  align-items: center;
+  border: 2px solid #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.24);
+  display: flex;
+  justify-content: center;
+}
+
+.buildingMarker {
+  background: #dc2626;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 18px;
+  height: 34px;
+  width: 34px;
+}
+
+.poleMarker {
+  background: #0f172a;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 30px;
+  height: 42px;
+  line-height: 1;
+  width: 22px;
+}
+
+.checkMarker {
+  background: #7c3aed;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 18px;
+  height: 28px;
+  width: 28px;
+}
+
+.markerPopup {
+  display: grid;
+  gap: 5px;
+  min-width: 150px;
+}
+
+.dangerMini,
+.dangerIcon {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.dangerMini {
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+.dangerIcon {
+  min-height: 34px;
+  padding: 8px;
+}
+
+.adminSwitch {
+  grid-column: 1 / -1;
 }
 
 .autoId {
@@ -568,7 +593,8 @@ td {
   }
 
   .workspace,
-  .stats {
+  .stats,
+  .adminFilters {
     grid-template-columns: 1fr;
   }
 
@@ -605,6 +631,7 @@ td {
   .stats,
   .tabs,
   .notice,
+  .adminFilters,
   .records {
     display: none;
   }
@@ -645,18 +672,6 @@ td {
     right: 12px;
     left: 12px;
     bottom: 16px;
-  }
-
-  .rotationControls {
-    display: block;
-  }
-
-  .rotationSlider {
-    min-width: 0;
-  }
-
-  .rotationSlider input {
-    width: 100%;
   }
 
   .mapControls span {
@@ -708,6 +723,34 @@ td {
 
   .records {
     padding: 12px;
+  }
+
+  .adminMode {
+    height: auto;
+    min-height: 100dvh;
+    overflow: auto;
+    padding-bottom: 12px;
+  }
+
+  .adminMode .topbar {
+    display: flex;
+    margin: 10px;
+  }
+
+  .adminMode .adminFilters {
+    display: grid;
+    margin: 10px;
+  }
+
+  .adminMode .records {
+    display: block;
+    margin: 10px;
+  }
+
+  .adminMode .mapShell,
+  .adminMode .map {
+    height: 70dvh;
+    min-height: 70dvh;
   }
 
   th,

@@ -4,16 +4,20 @@ import {
   Camera,
   CheckCircle2,
   ClipboardList,
+  Download,
   LocateFixed,
   LogOut,
   MapPin,
   Plus,
   RefreshCcw,
   Search,
+  Trash2,
   UserRound,
   X,
 } from 'lucide-react';
-import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import * as XLSX from 'xlsx';
 import 'leaflet/dist/leaflet.css';
 import './styles.css';
 import { hasSupabaseConfig, supabase, SUPABASE_BUCKET } from './supabaseClient';
@@ -21,13 +25,15 @@ import { hasSupabaseConfig, supabase, SUPABASE_BUCKET } from './supabaseClient';
 const today = new Date().toISOString().slice(0, 10);
 const defaultLocation = { latitude: 32.8872, longitude: 13.1913 };
 const PROFILE_KEY = 'site-survey-profile';
+const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || '1234';
 
 const resources = {
   buildings: {
     title: 'إضافة بناية',
     singular: 'بناية',
+    plural: 'البنايات',
     table: 'buildings',
-    accent: '#2563eb',
+    accent: '#dc2626',
     empty: {
       id: null,
       latitude: defaultLocation.latitude,
@@ -50,15 +56,15 @@ const resources = {
       ['building_status', 'Building status', 'select', ['جاهزه', 'غير جاهزه', 'بنايه متضرره']],
       ['district', 'district', 'text'],
       ['tech_name', 'tech name', 'text'],
-      ['survey_date', 'date', 'date'],
       ['record_status', 'Record Status', 'select', ['New', 'Submitted', 'Reviewed', 'Rejected']],
       ['notes', 'Notes', 'textarea'],
     ],
-    columns: ['id', 'building_type', 'floor_number', 'users_number', 'building_status', 'district', 'tech_name', 'record_status'],
+    columns: ['id', 'building_type', 'floor_number', 'users_number', 'building_status', 'district', 'tech_name', 'record_status', 'record_date'],
   },
   poles: {
     title: 'إضافة عمود',
     singular: 'عمود',
+    plural: 'الأعمدة',
     table: 'poles',
     accent: '#059669',
     empty: {
@@ -83,15 +89,15 @@ const resources = {
       ['pole_status', 'Pole Status', 'select', ['جيد', 'غير جيد']],
       ['district', 'district', 'text'],
       ['tech_name', 'tech name', 'text'],
-      ['survey_date', 'date', 'date'],
       ['record_status', 'Record Status', 'select', ['New', 'Submitted', 'Reviewed', 'Rejected']],
       ['notes', 'Notes', 'textarea'],
     ],
-    columns: ['id', 'pole_owner', 'pole_type', 'pole_length', 'pole_status', 'district', 'tech_name', 'record_status'],
+    columns: ['id', 'pole_owner', 'pole_type', 'pole_length', 'pole_status', 'district', 'tech_name', 'record_status', 'record_date'],
   },
   column_checks: {
     title: 'إضافة عمود جديد',
     singular: 'فحص عمود',
+    plural: 'فحص الأعمدة',
     table: 'column_checks',
     accent: '#7c3aed',
     empty: {
@@ -114,7 +120,7 @@ const resources = {
       ['is_existing', 'هل هو موجود', 'select', ['نعم', 'لا']],
       ['notes', 'ملاحظة', 'textarea'],
     ],
-    columns: ['id', 'district', 'tech_name', 'has_objection', 'is_existing', 'is_planted', 'notes'],
+    columns: ['id', 'district', 'tech_name', 'has_objection', 'is_existing', 'is_planted', 'notes', 'record_date'],
   },
 };
 
@@ -130,6 +136,7 @@ const labels = {
   tech_name: 'tech name',
   survey_date: 'date',
   record_status: 'Record Status',
+  record_date: 'Record date',
   notes: 'Notes',
   photo_url: 'Photo URL',
   pole_owner: 'Pole owner',
@@ -139,6 +146,30 @@ const labels = {
   has_objection: 'هل عليه اعتراض',
   is_existing: 'هل هو موجود',
   is_planted: 'هل تم زرعه',
+};
+
+const markerIcons = {
+  buildings: L.divIcon({
+    className: '',
+    html: '<div class="surveyMarker buildingMarker">🏢</div>',
+    iconSize: [34, 34],
+    iconAnchor: [17, 34],
+    popupAnchor: [0, -30],
+  }),
+  poles: L.divIcon({
+    className: '',
+    html: '<div class="surveyMarker poleMarker">▮</div>',
+    iconSize: [22, 42],
+    iconAnchor: [11, 42],
+    popupAnchor: [0, -38],
+  }),
+  column_checks: L.divIcon({
+    className: '',
+    html: '<div class="surveyMarker checkMarker">●</div>',
+    iconSize: [28, 28],
+    iconAnchor: [14, 28],
+    popupAnchor: [0, -24],
+  }),
 };
 
 function readSavedProfile() {
@@ -165,6 +196,40 @@ function makeEmptyForms(profile) {
   );
 }
 
+function formatDate(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const yy = String(date.getFullYear()).slice(-2);
+  return `${dd}-${mm}-${yy}`;
+}
+
+function makeRecordId(type) {
+  const prefix = type === 'buildings' ? 'BLD' : type === 'poles' ? 'POL' : 'COL';
+  const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `${prefix}-${stamp}-${suffix}`;
+}
+
+function yesNoToBoolean(value) {
+  return value === true || value === 'نعم';
+}
+
+function booleanToYesNo(value) {
+  if (typeof value === 'boolean') return value ? 'نعم' : 'لا';
+  return value || '-';
+}
+
+function normalizeRow(row, type) {
+  return {
+    ...row,
+    survey_type: resources[type].plural,
+    record_date: formatDate(row.created_at || row.survey_date),
+  };
+}
+
 function MapCenterSync({ value, onChange }) {
   const map = useMap();
 
@@ -188,15 +253,28 @@ function MapCenterSync({ value, onChange }) {
   return null;
 }
 
-function makeRecordId(type) {
-  const prefix = type === 'buildings' ? 'BLD' : type === 'poles' ? 'POL' : 'COL';
-  const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
-  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `${prefix}-${stamp}-${suffix}`;
-}
-
-function yesNoToBoolean(value) {
-  return value === true || value === 'نعم';
+function SurveyMarkers({ groupedRecords, onDelete, canDelete }) {
+  return Object.entries(groupedRecords).flatMap(([type, rows]) =>
+    rows.map((row) => (
+      <Marker key={`${type}-${row.id}`} position={[row.latitude, row.longitude]} icon={markerIcons[type]}>
+        <Popup>
+          <div className="markerPopup">
+            <strong>{resources[type].singular}</strong>
+            <span>{row.id}</span>
+            <span>{row.district || '-'}</span>
+            <span>{row.tech_name || '-'}</span>
+            <span>{formatDate(row.created_at || row.survey_date)}</span>
+            {row.photo_url && <a href={row.photo_url} target="_blank" rel="noreferrer">فتح الصورة</a>}
+            {canDelete && (
+              <button type="button" className="dangerMini" onClick={() => onDelete(type, row.id)}>
+                حذف النقطة
+              </button>
+            )}
+          </div>
+        </Popup>
+      </Marker>
+    )),
+  );
 }
 
 function App() {
@@ -208,30 +286,65 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [photoFile, setPhotoFile] = useState(null);
-  const [mapRotation, setMapRotation] = useState(0);
   const [formDrawerOpen, setFormDrawerOpen] = useState(false);
+  const [adminFilters, setAdminFilters] = useState({ district: '', techName: '', type: 'all' });
 
+  const isAdmin = profile?.role === 'admin';
   const current = resources[active];
   const form = forms[active];
 
-  const totals = useMemo(
-    () => ({
-      buildings: records.buildings.length,
-      poles: records.poles.length,
-      column_checks: records.column_checks.length,
-    }),
-    [records],
+  const scopedRecords = useMemo(() => {
+    const filtered = {};
+    for (const [type, rows] of Object.entries(records)) {
+      filtered[type] = rows
+        .map((row) => normalizeRow(row, type))
+        .filter((row) => {
+          if (!isAdmin) return row.tech_name === profile?.techName && row.district === profile?.district;
+          if (adminFilters.type !== 'all' && adminFilters.type !== type) return false;
+          if (adminFilters.district && row.district !== adminFilters.district) return false;
+          if (adminFilters.techName && row.tech_name !== adminFilters.techName) return false;
+          if (query && !JSON.stringify(row).toLowerCase().includes(query.toLowerCase())) return false;
+          return true;
+        });
+    }
+    return filtered;
+  }, [records, isAdmin, profile, adminFilters, query]);
+
+  const currentRows = scopedRecords[active] || [];
+  const allVisibleRows = useMemo(
+    () => Object.entries(scopedRecords).flatMap(([type, rows]) => rows.map((row) => ({ ...row, _type: type }))),
+    [scopedRecords],
   );
 
+  const totals = useMemo(
+    () => ({
+      buildings: scopedRecords.buildings.length,
+      poles: scopedRecords.poles.length,
+      column_checks: scopedRecords.column_checks.length,
+    }),
+    [scopedRecords],
+  );
+
+  const adminOptions = useMemo(() => {
+    const all = Object.values(records).flat();
+    return {
+      districts: [...new Set(all.map((row) => row.district).filter(Boolean))].sort(),
+      techs: [...new Set(all.map((row) => row.tech_name).filter(Boolean))].sort(),
+    };
+  }, [records]);
+
   useEffect(() => {
-    if (profile) loadAll();
+    if (profile) {
+      loadAll();
+      requestCurrentLocation(true);
+    }
   }, [profile]);
 
   function saveProfile(nextProfile) {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(nextProfile));
     setProfile(nextProfile);
     setForms(makeEmptyForms(nextProfile));
-    setMessage(`أهلاً ${nextProfile.techName}. تم تثبيت الاسم والمنطقة داخل البرنامج.`);
+    setMessage(nextProfile.role === 'admin' ? 'تم الدخول كأدمن.' : `أهلاً ${nextProfile.techName}. تم تثبيت الاسم والمنطقة.`);
   }
 
   function changeProfile() {
@@ -250,7 +363,7 @@ function App() {
     try {
       const nextRecords = {};
       for (const [key, config] of Object.entries(resources)) {
-        const { data, error } = await supabase.from(config.table).select('*').order('created_at', { ascending: false }).limit(500);
+        const { data, error } = await supabase.from(config.table).select('*').order('created_at', { ascending: false }).limit(2000);
         if (error) throw error;
         nextRecords[key] = data || [];
       }
@@ -274,13 +387,13 @@ function App() {
   }
 
   function setLocation(location) {
-    setForms((previous) => ({
-      ...previous,
-      [active]: {
-        ...previous[active],
-        ...location,
-      },
-    }));
+    setForms((previous) => {
+      const next = {};
+      for (const [key, value] of Object.entries(previous)) {
+        next[key] = { ...value, ...location };
+      }
+      return next;
+    });
   }
 
   async function uploadPhoto(recordId) {
@@ -308,6 +421,7 @@ function App() {
         id: recordId,
         latitude: Number(form.latitude),
         longitude: Number(form.longitude),
+        survey_date: today,
         photo_url: photoUrl,
       };
 
@@ -325,6 +439,7 @@ function App() {
 
       setForms((previous) => ({ ...previous, [active]: applyProfileToForm(current.empty, profile) }));
       setPhotoFile(null);
+      setFormDrawerOpen(false);
       setMessage(`تم حفظ ${current.singular} بنجاح.`);
       await loadAll();
     } catch (error) {
@@ -334,43 +449,93 @@ function App() {
     }
   }
 
-  function useCurrentLocation() {
+  async function deleteRecord(type, id) {
+    const confirmed = window.confirm('هل تريد حذف هذه النقطة من السيستم؟');
+    if (!confirmed) return;
+
+    setBusy(true);
+    try {
+      const { error } = await supabase.from(resources[type].table).delete().eq('id', id);
+      if (error) throw error;
+      setRecords((previous) => ({
+        ...previous,
+        [type]: previous[type].filter((row) => row.id !== id),
+      }));
+      setMessage('تم حذف النقطة بنجاح.');
+    } catch (error) {
+      setMessage(`تعذر الحذف: ${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function requestCurrentLocation(silent = false) {
     if (!navigator.geolocation) {
-      setMessage('المتصفح لا يدعم تحديد الموقع.');
+      if (!silent) setMessage('المتصفح لا يدعم تحديد الموقع.');
       return;
     }
-    setMessage('جار تحديد الموقع...');
+    if (!silent) setMessage('جار تحديد الموقع...');
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setLocation({
           latitude: Number(position.coords.latitude.toFixed(7)),
           longitude: Number(position.coords.longitude.toFixed(7)),
         });
-        setMessage('تم استخدام موقع الجهاز الحالي.');
+        if (!silent) setMessage('تم استخدام موقع الجهاز الحالي.');
       },
-      () => setMessage('لم يتم السماح بالوصول إلى موقع الجهاز. يمكنك الضغط على الخريطة يدوياً.'),
+      () => {
+        if (!silent) setMessage('لم يتم السماح بالوصول إلى موقع الجهاز. حرّك الخريطة يدوياً وحدد النقطة من الدبوس.');
+      },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
     );
+  }
+
+  function exportExcel() {
+    const rows = allVisibleRows.map((row) => ({
+      Type: row.survey_type,
+      ID: row.id,
+      Latitude: row.latitude,
+      Longitude: row.longitude,
+      District: row.district,
+      'Tech name': row.tech_name,
+      'Record date': row.record_date,
+      'Record Status': row.record_status || '',
+      'Building type': row.building_type || '',
+      'Floor number': row.floor_number ?? '',
+      'Users number': row.users_number ?? '',
+      'Building status': row.building_status || '',
+      'Pole owner': row.pole_owner || '',
+      'Pole type': row.pole_type || '',
+      'Pole length': row.pole_length ?? '',
+      'Pole Status': row.pole_status || '',
+      'هل عليه اعتراض': booleanToYesNo(row.has_objection),
+      'هل هو موجود': booleanToYesNo(row.is_existing),
+      'هل تم زرعه': booleanToYesNo(row.is_planted),
+      Notes: row.notes || '',
+      'Photo URL': row.photo_url || '',
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Site Survey');
+    XLSX.writeFile(workbook, `site-survey-${formatDate(new Date())}.xlsx`);
   }
 
   if (!profile) {
     return <LoginPage onSave={saveProfile} />;
   }
 
-  const filteredRows = records[active].filter((row) => JSON.stringify(row).toLowerCase().includes(query.toLowerCase()));
-
   return (
-    <main className="app">
+    <main className={`app ${isAdmin ? 'adminMode' : ''}`}>
       <header className="topbar">
         <div>
           <p className="eyebrow">Site Survey Pro</p>
-          <h1>مرجع ميداني سريع للبنايات والأعمدة</h1>
+          <h1>{isAdmin ? 'لوحة تحكم الأدمن' : 'مرجع ميداني سريع للبنايات والأعمدة'}</h1>
         </div>
         <div className="actions">
-          <div className="profilePill" title="بيانات الفني الحالية">
+          <div className="profilePill" title="بيانات المستخدم الحالية">
             <UserRound size={17} />
             <span>{profile.techName}</span>
-            <strong>{profile.district}</strong>
+            <strong>{isAdmin ? 'Admin' : profile.district}</strong>
           </div>
           <button className="ghost" type="button" onClick={changeProfile}>
             <LogOut size={18} />
@@ -380,6 +545,12 @@ function App() {
             <RefreshCcw size={18} />
             تحديث
           </button>
+          {isAdmin && (
+            <button className="ghost" type="button" onClick={exportExcel}>
+              <Download size={18} />
+              Excel
+            </button>
+          )}
         </div>
       </header>
 
@@ -400,6 +571,36 @@ function App() {
           <strong>{totals.column_checks}</strong>
         </article>
       </section>
+
+      {isAdmin && (
+        <section className="adminFilters">
+          <label>
+            المنطقة
+            <select value={adminFilters.district} onChange={(event) => setAdminFilters((prev) => ({ ...prev, district: event.target.value }))}>
+              <option value="">كل المناطق</option>
+              {adminOptions.districts.map((district) => <option key={district} value={district}>{district}</option>)}
+            </select>
+          </label>
+          <label>
+            الفني
+            <select value={adminFilters.techName} onChange={(event) => setAdminFilters((prev) => ({ ...prev, techName: event.target.value }))}>
+              <option value="">كل الفنيين</option>
+              {adminOptions.techs.map((tech) => <option key={tech} value={tech}>{tech}</option>)}
+            </select>
+          </label>
+          <label>
+            النوع
+            <select value={adminFilters.type} onChange={(event) => setAdminFilters((prev) => ({ ...prev, type: event.target.value }))}>
+              <option value="all">كل الأنواع</option>
+              {Object.entries(resources).map(([key, item]) => <option key={key} value={key}>{item.plural}</option>)}
+            </select>
+          </label>
+          <label className="search">
+            <Search size={17} />
+            <input placeholder="بحث في كل البيانات..." value={query} onChange={(event) => setQuery(event.target.value)} />
+          </label>
+        </section>
+      )}
 
       <nav className="tabs" aria-label="Survey sections">
         {Object.entries(resources).map(([key, item]) => (
@@ -422,41 +623,27 @@ function App() {
       {message && <div className="notice">{message}</div>}
 
       <section className="workspace">
-        <div className="mapShell" style={{ '--map-rotation': `${mapRotation}deg` }}>
+        <div className="mapShell">
           <button className="mapAddButton" type="button" onClick={() => setFormDrawerOpen(true)}>
             <Plus size={18} />
             إضافة بيانات
           </button>
-          <MapContainer center={[form.latitude, form.longitude]} zoom={15} scrollWheelZoom className="map">
+          <MapContainer center={[form.latitude, form.longitude]} zoom={17} scrollWheelZoom className="map">
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             <MapCenterSync value={form} onChange={setLocation} />
+            <SurveyMarkers groupedRecords={scopedRecords} onDelete={deleteRecord} canDelete />
           </MapContainer>
           <div className="fixedPin" aria-hidden="true">
             <MapPin size={36} />
           </div>
           <div className="mapControls">
-            <button type="button" onClick={useCurrentLocation}>
+            <button type="button" onClick={() => requestCurrentLocation(false)}>
               <LocateFixed size={17} />
               موقعي الحالي
             </button>
-            <div className="rotationControls" aria-label="Map rotation controls">
-              <label className="rotationSlider">
-                <span>تدوير الخريطة</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="359"
-                  value={mapRotation}
-                  onInput={(event) => setMapRotation(Number(event.currentTarget.value))}
-                  onChange={(event) => setMapRotation(Number(event.target.value))}
-                  aria-label="تدوير الخريطة باليد"
-                />
-                <strong>{mapRotation}°</strong>
-              </label>
-            </div>
             <span>{form.latitude}, {form.longitude}</span>
           </div>
         </div>
@@ -483,7 +670,7 @@ function App() {
             <div>
               <p>سجل جديد</p>
               <h2>{current.title}</h2>
-              <span className="autoId">ID تلقائي عند الحفظ</span>
+              <span className="autoId">ID تلقائي، التاريخ {formatDate(new Date())}</span>
             </div>
             <div className="panelHeaderActions">
               <Camera color={current.accent} />
@@ -533,11 +720,13 @@ function App() {
 
       <section className="records">
         <div className="recordsHeader">
-          <h2>السجلات</h2>
-          <label className="search">
-            <Search size={17} />
-            <input placeholder="بحث سريع..." value={query} onChange={(event) => setQuery(event.target.value)} />
-          </label>
+          <h2>{isAdmin ? 'كل السجلات' : 'سجلاتي'}</h2>
+          {!isAdmin && (
+            <label className="search">
+              <Search size={17} />
+              <input placeholder="بحث سريع..." value={query} onChange={(event) => setQuery(event.target.value)} />
+            </label>
+          )}
         </div>
         <div className="tableWrap">
           <table>
@@ -547,20 +736,26 @@ function App() {
                 <th>Latitude</th>
                 <th>Longitude</th>
                 <th>Photo URL</th>
+                <th>حذف</th>
               </tr>
             </thead>
             <tbody>
-              {filteredRows.map((row) => (
+              {currentRows.map((row) => (
                 <tr key={row.id}>
                   {current.columns.map((column) => <td key={column}>{formatValue(row[column])}</td>)}
                   <td>{row.latitude}</td>
                   <td>{row.longitude}</td>
                   <td>{row.photo_url ? <a href={row.photo_url} target="_blank" rel="noreferrer">فتح الصورة</a> : '-'}</td>
+                  <td>
+                    <button className="dangerIcon" type="button" onClick={() => deleteRecord(active, row.id)} title="حذف">
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
                 </tr>
               ))}
-              {!filteredRows.length && (
+              {!currentRows.length && (
                 <tr>
-                  <td colSpan={current.columns.length + 3} className="empty">لا توجد سجلات بعد.</td>
+                  <td colSpan={current.columns.length + 4} className="empty">لا توجد سجلات حسب المستخدم والمنطقة الحالية.</td>
                 </tr>
               )}
             </tbody>
@@ -574,11 +769,23 @@ function App() {
 function LoginPage({ onSave }) {
   const [techName, setTechName] = useState('');
   const [district, setDistrict] = useState('');
+  const [adminMode, setAdminMode] = useState(false);
+  const [adminPin, setAdminPin] = useState('');
+  const [error, setError] = useState('');
 
   function submit(event) {
     event.preventDefault();
+    setError('');
+    if (adminMode) {
+      if (adminPin !== ADMIN_PIN) {
+        setError('كود الأدمن غير صحيح.');
+        return;
+      }
+      onSave({ techName: techName.trim() || 'Admin', district: 'ALL', role: 'admin' });
+      return;
+    }
     if (!techName.trim() || !district.trim()) return;
-    onSave({ techName: techName.trim(), district: district.trim() });
+    onSave({ techName: techName.trim(), district: district.trim(), role: 'tech' });
   }
 
   return (
@@ -588,19 +795,34 @@ function LoginPage({ onSave }) {
           <UserRound size={30} />
         </div>
         <p className="eyebrow">Site Survey Pro</p>
-        <h1>تسجيل دخول الفني</h1>
-        <p className="loginText">أدخل اسمك والمنطقة مرة واحدة. سيتم تثبيتها تلقائياً على كل سجل جديد داخل البرنامج.</p>
+        <h1>{adminMode ? 'دخول الأدمن' : 'تسجيل دخول الفني'}</h1>
+        <p className="loginText">الفني يرى بيانات اسمه ومنطقته فقط. الأدمن يرى كل البيانات ويصدّر Excel.</p>
+
+        <label className="check adminSwitch">
+          <input type="checkbox" checked={adminMode} onChange={(event) => setAdminMode(event.target.checked)} />
+          <span>تسجيل دخول كأدمن</span>
+        </label>
 
         <label>
-          اسم الفني
+          اسم المستخدم
           <input autoFocus value={techName} onChange={(event) => setTechName(event.target.value)} placeholder="مثال: Ahmed Ali" />
         </label>
-        <label>
-          المنطقة
-          <input value={district} onChange={(event) => setDistrict(event.target.value)} placeholder="مثال: Hay Andalus Zone 2" />
-        </label>
+        {!adminMode && (
+          <label>
+            المنطقة
+            <input value={district} onChange={(event) => setDistrict(event.target.value)} placeholder="مثال: Hay Andalus Zone 2" />
+          </label>
+        )}
+        {adminMode && (
+          <label>
+            كود الأدمن
+            <input type="password" value={adminPin} onChange={(event) => setAdminPin(event.target.value)} placeholder="Admin PIN" />
+          </label>
+        )}
 
-        <button className="save" type="submit" disabled={!techName.trim() || !district.trim()}>
+        {error && <div className="notice">{error}</div>}
+
+        <button className="save" type="submit" disabled={adminMode ? !adminPin.trim() : !techName.trim() || !district.trim()}>
           دخول البرنامج
         </button>
       </form>
@@ -630,22 +852,12 @@ function Field({ name, label, type, options, value, locked, onChange }) {
     );
   }
 
-  if (type === 'checkbox') {
-    return (
-      <label className="check">
-        <input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} />
-        <span>{label}</span>
-      </label>
-    );
-  }
-
   return (
     <label>
       {label}
       <input
         readOnly={locked}
         className={locked ? 'lockedInput' : ''}
-        required={name === 'id'}
         type={type}
         step={type === 'number' ? 'any' : undefined}
         value={value || ''}

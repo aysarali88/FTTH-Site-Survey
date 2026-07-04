@@ -98,6 +98,10 @@ drop policy if exists "public update buildings" on public.buildings;
 create policy "public update buildings" on public.buildings
 for update using (true) with check (true);
 
+drop policy if exists "public delete buildings" on public.buildings;
+create policy "public delete buildings" on public.buildings
+for delete using (true);
+
 drop policy if exists "public read poles" on public.poles;
 create policy "public read poles" on public.poles
 for select using (true);
@@ -110,6 +114,10 @@ drop policy if exists "public update poles" on public.poles;
 create policy "public update poles" on public.poles
 for update using (true) with check (true);
 
+drop policy if exists "public delete poles" on public.poles;
+create policy "public delete poles" on public.poles
+for delete using (true);
+
 drop policy if exists "public read column checks" on public.column_checks;
 create policy "public read column checks" on public.column_checks
 for select using (true);
@@ -121,6 +129,17 @@ for insert with check (true);
 drop policy if exists "public update column checks" on public.column_checks;
 create policy "public update column checks" on public.column_checks
 for update using (true) with check (true);
+
+drop policy if exists "public delete column checks" on public.column_checks;
+create policy "public delete column checks" on public.column_checks
+for delete using (true);
+
+grant select, insert, update, delete on public.buildings to anon;
+grant select, insert, update, delete on public.poles to anon;
+grant select, insert, update, delete on public.column_checks to anon;
+grant select, insert, update, delete on public.buildings to authenticated;
+grant select, insert, update, delete on public.poles to authenticated;
+grant select, insert, update, delete on public.column_checks to authenticated;
 
 insert into storage.buckets (id, name, public)
 values ('survey-photos', 'survey-photos', true)
