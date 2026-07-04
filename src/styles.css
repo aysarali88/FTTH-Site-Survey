@@ -293,6 +293,12 @@ button:disabled {
   width: 100%;
 }
 
+.mapShell.autoRotating .leaflet-map-pane {
+  rotate: var(--map-heading, 0deg);
+  scale: 1.35;
+  transform-origin: 50% 50%;
+}
+
 .fixedPin {
   color: #dc2626;
   filter: drop-shadow(0 8px 10px rgba(15, 23, 42, 0.35));
@@ -726,10 +732,21 @@ td {
   }
 
   .mapAddButton {
-    left: 12px;
-    right: 12px;
-    top: 12px;
-    width: auto;
+    border-radius: 999px;
+    bottom: 118px;
+    box-shadow: 0 18px 38px rgba(15, 23, 42, 0.32);
+    font-size: 0;
+    height: 62px;
+    left: auto;
+    padding: 0;
+    right: 16px;
+    top: auto;
+    width: 62px;
+  }
+
+  .mapAddButton svg {
+    height: 30px;
+    width: 30px;
   }
 
   .coordinateGrid,
@@ -738,16 +755,46 @@ td {
   }
 
   .mapControls {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 8px;
-    right: 12px;
-    left: 12px;
-    bottom: 16px;
+    align-items: center;
+    background: transparent;
+    border: 0;
+    bottom: 18px;
+    box-shadow: none;
+    display: flex;
+    gap: 10px;
+    left: 14px;
+    padding: 0;
+    right: auto;
+  }
+
+  .mapControls button {
+    border-radius: 999px;
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.25);
+    font-size: 0;
+    height: 52px;
+    min-height: 52px;
+    padding: 0;
+    width: 52px;
+  }
+
+  .mapControls button svg {
+    height: 24px;
+    width: 24px;
   }
 
   .mapControls span {
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    box-shadow: 0 12px 26px rgba(15, 23, 42, 0.16);
+    direction: ltr;
+    font-size: 11px;
+    max-width: 215px;
+    overflow: hidden;
+    padding: 9px 11px;
     text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .panel {
