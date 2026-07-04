@@ -95,9 +95,9 @@ const resources = {
     columns: ['id', 'pole_owner', 'pole_type', 'pole_length', 'pole_status', 'district', 'tech_name', 'record_status', 'record_date'],
   },
   column_checks: {
-    title: 'إضافة عمود جديد',
-    singular: 'فحص عمود',
-    plural: 'فحص الأعمدة',
+    title: 'زراعة عمود جديد',
+    singular: 'زراعة عمود جديد',
+    plural: 'زراعة عمود جديد',
     table: 'column_checks',
     accent: '#7c3aed',
     empty: {
@@ -491,32 +491,59 @@ function App() {
   }
 
   function exportExcel() {
-    const rows = allVisibleRows.map((row) => ({
-      Type: row.survey_type,
-      ID: row.id,
-      Latitude: row.latitude,
-      Longitude: row.longitude,
-      District: row.district,
-      'Tech name': row.tech_name,
-      'Record date': row.record_date,
-      'Record Status': row.record_status || '',
-      'Building type': row.building_type || '',
-      'Floor number': row.floor_number ?? '',
-      'Users number': row.users_number ?? '',
-      'Building status': row.building_status || '',
-      'Pole owner': row.pole_owner || '',
-      'Pole type': row.pole_type || '',
-      'Pole length': row.pole_length ?? '',
-      'Pole Status': row.pole_status || '',
-      'هل عليه اعتراض': booleanToYesNo(row.has_objection),
-      'هل هو موجود': booleanToYesNo(row.is_existing),
-      'هل تم زرعه': booleanToYesNo(row.is_planted),
-      Notes: row.notes || '',
-      'Photo URL': row.photo_url || '',
-    }));
-    const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Site Survey');
+
+    const sheets = {
+      'البنايات': scopedRecords.buildings.map((row) => ({
+        ID: row.id,
+        Latitude: row.latitude,
+        Longitude: row.longitude,
+        'Building type': row.building_type || '',
+        'Floor number': row.floor_number ?? '',
+        'Users number': row.users_number ?? '',
+        'Building status': row.building_status || '',
+        district: row.district || '',
+        'tech name': row.tech_name || '',
+        date: row.record_date,
+        'Record Status': row.record_status || '',
+        Notes: row.notes || '',
+        'Photo URL': row.photo_url || '',
+      })),
+      'الأعمدة': scopedRecords.poles.map((row) => ({
+        ID: row.id,
+        Latitude: row.latitude,
+        Longitude: row.longitude,
+        'Pole owner': row.pole_owner || '',
+        'Pole type': row.pole_type || '',
+        'Pole length': row.pole_length ?? '',
+        'Pole Status': row.pole_status || '',
+        district: row.district || '',
+        'tech name': row.tech_name || '',
+        date: row.record_date,
+        'Record Status': row.record_status || '',
+        Notes: row.notes || '',
+        'Photo URL': row.photo_url || '',
+      })),
+      'زراعة عمود جديد': scopedRecords.column_checks.map((row) => ({
+        ID: row.id,
+        Latitude: row.latitude,
+        Longitude: row.longitude,
+        district: row.district || '',
+        'tech name': row.tech_name || '',
+        date: row.record_date,
+        'هل عليه اعتراض': booleanToYesNo(row.has_objection),
+        'هل هو موجود': booleanToYesNo(row.is_existing),
+        'هل تم زرعه': booleanToYesNo(row.is_planted),
+        Notes: row.notes || '',
+        'Photo URL': row.photo_url || '',
+      })),
+    };
+
+    Object.entries(sheets).forEach(([sheetName, rows]) => {
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    });
+
     XLSX.writeFile(workbook, `site-survey-${formatDate(new Date())}.xlsx`);
   }
 
@@ -628,9 +655,11 @@ function App() {
             <Plus size={18} />
             إضافة بيانات
           </button>
-          <MapContainer center={[form.latitude, form.longitude]} zoom={17} scrollWheelZoom className="map">
+          <MapContainer center={[form.latitude, form.longitude]} zoom={18} maxZoom={22} scrollWheelZoom className="map">
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              maxZoom={22}
+              maxNativeZoom={19}
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             <MapCenterSync value={form} onChange={setLocation} />
