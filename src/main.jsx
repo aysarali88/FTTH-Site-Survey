@@ -4,14 +4,11 @@ import {
   Camera,
   CheckCircle2,
   ClipboardList,
-  Compass,
   LocateFixed,
   LogOut,
   MapPin,
   Plus,
   RefreshCcw,
-  RotateCcw,
-  RotateCw,
   Search,
   UserRound,
   X,
@@ -356,13 +353,6 @@ function App() {
     );
   }
 
-  function rotateMap(delta) {
-    setMapRotation((currentRotation) => {
-      const nextRotation = (currentRotation + delta + 360) % 360;
-      return nextRotation;
-    });
-  }
-
   if (!profile) {
     return <LoginPage onSave={saveProfile} />;
   }
@@ -453,33 +443,42 @@ function App() {
               موقعي الحالي
             </button>
             <div className="rotationControls" aria-label="Map rotation controls">
-              <button type="button" onClick={() => rotateMap(-15)} title="تدوير يسار">
-                <RotateCcw size={16} />
-              </button>
               <label className="rotationSlider">
-                <span>تدوير باليد</span>
+                <span>تدوير الخريطة</span>
                 <input
                   type="range"
                   min="0"
                   max="359"
                   value={mapRotation}
+                  onInput={(event) => setMapRotation(Number(event.currentTarget.value))}
                   onChange={(event) => setMapRotation(Number(event.target.value))}
                   aria-label="تدوير الخريطة باليد"
                 />
+                <strong>{mapRotation}°</strong>
               </label>
-              <button className="northButton" type="button" onClick={() => setMapRotation(0)} title="إرجاع الشمال">
-                <Compass size={16} />
-                {mapRotation}°
-              </button>
-              <button type="button" onClick={() => rotateMap(15)} title="تدوير يمين">
-                <RotateCw size={16} />
-              </button>
             </div>
             <span>{form.latitude}, {form.longitude}</span>
           </div>
         </div>
 
         <form className={`panel ${formDrawerOpen ? 'open' : ''}`} onSubmit={saveRecord}>
+          <div className="drawerTabs" aria-label="اختيار نوع الإضافة">
+            {Object.entries(resources).map(([key, item]) => (
+              <button
+                key={key}
+                type="button"
+                className={active === key ? 'active' : ''}
+                style={{ '--accent': item.accent }}
+                onClick={() => {
+                  setActive(key);
+                  setPhotoFile(null);
+                }}
+              >
+                {item.title}
+              </button>
+            ))}
+          </div>
+
           <div className="panelHeader">
             <div>
               <p>سجل جديد</p>
