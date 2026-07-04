@@ -247,6 +247,18 @@ button:disabled {
   width: 100%;
 }
 
+.mapShell .leaflet-tile-pane {
+  transform: rotate(var(--map-rotation, 0deg)) scale(1.35) !important;
+  transform-origin: 50% 50%;
+}
+
+.mapShell .leaflet-overlay-pane,
+.mapShell .leaflet-shadow-pane,
+.mapShell .leaflet-marker-pane {
+  transform: rotate(var(--map-rotation, 0deg)) !important;
+  transform-origin: 50% 50%;
+}
+
 .fixedPin {
   color: #dc2626;
   filter: drop-shadow(0 8px 10px rgba(15, 23, 42, 0.35));
@@ -287,6 +299,20 @@ button:disabled {
   background: #0f172a;
   color: #ffffff;
   min-height: 38px;
+}
+
+.rotationControls {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.rotationControls button {
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  color: #0f172a;
+  min-height: 38px;
+  padding: 8px 10px;
 }
 
 .mapControls span {
@@ -535,6 +561,11 @@ td {
     gap: 8px;
     right: 12px;
     left: 12px;
+  }
+
+  .rotationControls {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .mapControls span {

@@ -4,10 +4,13 @@ import {
   Camera,
   CheckCircle2,
   ClipboardList,
+  Compass,
   LocateFixed,
   LogOut,
   MapPin,
   RefreshCcw,
+  RotateCcw,
+  RotateCw,
   Search,
   UserRound,
 } from 'lucide-react';
@@ -206,6 +209,7 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [photoFile, setPhotoFile] = useState(null);
+  const [mapRotation, setMapRotation] = useState(0);
 
   const current = resources[active];
   const form = forms[active];
@@ -349,6 +353,13 @@ function App() {
     );
   }
 
+  function rotateMap(delta) {
+    setMapRotation((currentRotation) => {
+      const nextRotation = (currentRotation + delta + 360) % 360;
+      return nextRotation;
+    });
+  }
+
   if (!profile) {
     return <LoginPage onSave={saveProfile} />;
   }
@@ -417,7 +428,7 @@ function App() {
       {message && <div className="notice">{message}</div>}
 
       <section className="workspace">
-        <div className="mapShell">
+        <div className="mapShell" style={{ '--map-rotation': `${mapRotation}deg` }}>
           <MapContainer center={[form.latitude, form.longitude]} zoom={15} scrollWheelZoom className="map">
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -433,6 +444,18 @@ function App() {
               <LocateFixed size={17} />
               موقعي الحالي
             </button>
+            <div className="rotationControls" aria-label="Map rotation controls">
+              <button type="button" onClick={() => rotateMap(-15)} title="تدوير يسار">
+                <RotateCcw size={16} />
+              </button>
+              <button type="button" onClick={() => setMapRotation(0)} title="إرجاع الشمال">
+                <Compass size={16} />
+                {mapRotation}°
+              </button>
+              <button type="button" onClick={() => rotateMap(15)} title="تدوير يمين">
+                <RotateCw size={16} />
+              </button>
+            </div>
             <span>{form.latitude}, {form.longitude}</span>
           </div>
         </div>
