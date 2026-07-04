@@ -232,6 +232,31 @@ button:disabled {
   padding: 14px;
 }
 
+.adminPages {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.adminPages button {
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  color: #334155;
+}
+
+.adminPages button.active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+}
+
+.adminPages span {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
 .workspace {
   display: grid;
   gap: 16px;
@@ -515,6 +540,55 @@ textarea:focus {
   padding: 16px;
 }
 
+.photosPage {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-top: 16px;
+  padding: 16px;
+}
+
+.photoGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.photoCard {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.photoCard img {
+  aspect-ratio: 4 / 3;
+  background: #f1f5f9;
+  display: block;
+  object-fit: cover;
+  width: 100%;
+}
+
+.photoCard div {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+}
+
+.photoCard strong {
+  color: #0f172a;
+}
+
+.photoCard span {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.photosEmpty {
+  grid-column: 1 / -1;
+  padding: 28px;
+}
+
 .recordsHeader {
   justify-content: space-between;
   margin-bottom: 12px;
@@ -627,7 +701,9 @@ td {
   .stats,
   .tabs,
   .notice,
+  .adminPages,
   .adminFilters,
+  .photosPage,
   .records {
     display: none;
   }
@@ -738,7 +814,17 @@ td {
     margin: 10px;
   }
 
+  .adminMode .adminPages {
+    display: flex;
+    margin: 10px;
+  }
+
   .adminMode .records {
+    display: block;
+    margin: 10px;
+  }
+
+  .adminMode .photosPage {
     display: block;
     margin: 10px;
   }

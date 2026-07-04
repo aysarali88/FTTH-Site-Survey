@@ -310,6 +310,7 @@ function App() {
   const [photoFile, setPhotoFile] = useState(null);
   const [formDrawerOpen, setFormDrawerOpen] = useState(false);
   const [adminFilters, setAdminFilters] = useState({ district: '', techName: '', type: 'all' });
+  const [adminPage, setAdminPage] = useState('data');
 
   const isAdmin = profile?.role === 'admin';
   const current = resources[active];
@@ -336,6 +337,10 @@ function App() {
   const allVisibleRows = useMemo(
     () => Object.entries(scopedRecords).flatMap(([type, rows]) => rows.map((row) => ({ ...row, _type: type }))),
     [scopedRecords],
+  );
+  const visiblePhotos = useMemo(
+    () => allVisibleRows.filter((row) => row.photo_url),
+    [allVisibleRows],
   );
 
   const totals = useMemo(
@@ -622,6 +627,18 @@ function App() {
       </section>
 
       {isAdmin && (
+        <section className="adminPages" aria-label="Admin pages">
+          <button type="button" className={adminPage === 'data' ? 'active' : ''} onClick={() => setAdminPage('data')}>
+            البيانات
+          </button>
+          <button type="button" className={adminPage === 'photos' ? 'active' : ''} onClick={() => setAdminPage('photos')}>
+            الصور
+            <span>{visiblePhotos.length}</span>
+          </button>
+        </section>
+      )}
+
+      {isAdmin && (
         <section className="adminFilters">
           <label>
             المنطقة
@@ -769,6 +786,33 @@ function App() {
         </form>
       </section>
 
+      {isAdmin && adminPage === 'photos' && (
+        <section className="photosPage">
+          <div className="recordsHeader">
+            <h2>الصور</h2>
+            <span>{visiblePhotos.length} صورة</span>
+          </div>
+          <div className="photoGrid">
+            {visiblePhotos.map((row) => (
+              <article className="photoCard" key={`${row._type}-${row.id}`}>
+                <a href={row.photo_url} target="_blank" rel="noreferrer">
+                  <img src={row.photo_url} alt={`${resources[row._type].singular} ${row.id}`} loading="lazy" />
+                </a>
+                <div>
+                  <strong>{resources[row._type].singular}</strong>
+                  <span>ID: {row.id}</span>
+                  <span>المنطقة: {row.district || '-'}</span>
+                  <span>الفني: {row.tech_name || '-'}</span>
+                  <span>التاريخ: {row.record_date}</span>
+                </div>
+              </article>
+            ))}
+            {!visiblePhotos.length && <div className="empty photosEmpty">لا توجد صور حسب الفلاتر الحالية.</div>}
+          </div>
+        </section>
+      )}
+
+      {(!isAdmin || adminPage === 'data') && (
       <section className="records">
         <div className="recordsHeader">
           <h2>{isAdmin ? 'كل السجلات' : 'سجلاتي'}</h2>
@@ -813,6 +857,7 @@ function App() {
           </table>
         </div>
       </section>
+      )}
     </main>
   );
 }
