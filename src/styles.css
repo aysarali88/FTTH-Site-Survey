@@ -35,6 +35,43 @@ a {
   padding: 24px;
 }
 
+.loginPage {
+  align-items: center;
+  display: grid;
+  min-height: 100vh;
+  padding: 22px;
+}
+
+.loginCard {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+  display: grid;
+  gap: 16px;
+  margin: 0 auto;
+  max-width: 460px;
+  padding: 26px;
+  width: 100%;
+}
+
+.loginIcon {
+  align-items: center;
+  background: #e8eef8;
+  border-radius: 8px;
+  color: #0f172a;
+  display: flex;
+  height: 58px;
+  justify-content: center;
+  width: 58px;
+}
+
+.loginText {
+  color: #475569;
+  line-height: 1.7;
+  margin: 0;
+}
+
 .topbar {
   align-items: center;
   display: flex;
@@ -76,6 +113,33 @@ h2 {
   align-items: center;
   display: flex;
   gap: 10px;
+}
+
+.profilePill {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  color: #334155;
+  display: inline-flex;
+  gap: 8px;
+  min-height: 42px;
+  padding: 8px 12px;
+}
+
+.profilePill span,
+.profilePill strong {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.profilePill span {
+  color: #0f172a;
+  font-weight: 900;
+}
+
+.profilePill strong {
+  color: #2563eb;
 }
 
 button {
@@ -263,6 +327,13 @@ textarea:focus {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
 }
 
+.lockedInput {
+  background: #eef4ff;
+  color: #334155;
+  cursor: default;
+  font-weight: 800;
+}
+
 .wide,
 .photoBox,
 .save {
@@ -383,6 +454,7 @@ td {
   }
 
   .topbar,
+  .actions,
   .recordsHeader {
     align-items: stretch;
     flex-direction: column;

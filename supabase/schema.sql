@@ -40,6 +40,8 @@ create table if not exists public.column_checks (
   id text primary key,
   latitude double precision not null,
   longitude double precision not null,
+  district text,
+  tech_name text,
   has_objection boolean not null default false,
   is_existing boolean not null default false,
   is_planted boolean not null default false,
@@ -48,6 +50,12 @@ create table if not exists public.column_checks (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.column_checks
+add column if not exists district text;
+
+alter table public.column_checks
+add column if not exists tech_name text;
 
 create or replace function public.set_updated_at()
 returns trigger

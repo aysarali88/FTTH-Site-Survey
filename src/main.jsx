@@ -1,6 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Camera, CheckCircle2, ClipboardList, LocateFixed, MapPin, RefreshCcw, Search, UploadCloud } from 'lucide-react';
+import {
+  Camera,
+  CheckCircle2,
+  ClipboardList,
+  LocateFixed,
+  LogOut,
+  MapPin,
+  RefreshCcw,
+  Search,
+  UploadCloud,
+  UserRound,
+} from 'lucide-react';
 import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -17,6 +28,7 @@ const markerIcon = new L.Icon({
 
 const today = new Date().toISOString().slice(0, 10);
 const defaultLocation = { latitude: 32.8872, longitude: 13.1913 };
+const PROFILE_KEY = 'site-survey-profile';
 
 const resources = {
   buildings: {
@@ -96,6 +108,8 @@ const resources = {
       id: '',
       latitude: defaultLocation.latitude,
       longitude: defaultLocation.longitude,
+      district: '',
+      tech_name: '',
       has_objection: false,
       is_existing: false,
       is_planted: false,
@@ -104,12 +118,14 @@ const resources = {
     },
     fields: [
       ['id', 'ID', 'text'],
+      ['district', 'district', 'text'],
+      ['tech_name', 'tech name', 'text'],
       ['has_objection', 'هل عليه اعتراض', 'checkbox'],
       ['is_existing', 'هل هو موجود', 'checkbox'],
       ['is_planted', 'هل تم زرعه', 'checkbox'],
       ['notes', 'ملاحظة', 'textarea'],
     ],
-    columns: ['id', 'has_objection', 'is_existing', 'is_planted', 'notes'],
+    columns: ['id', 'district', 'tech_name', 'has_objection', 'is_existing', 'is_planted', 'notes'],
   },
 };
 
@@ -136,6 +152,30 @@ const labels = {
   is_planted: 'هل تم زرعه',
 };
 
+function readSavedProfile() {
+  try {
+    const saved = localStorage.getItem(PROFILE_KEY);
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    return null;
+  }
+}
+
+function applyProfileToForm(form, profile) {
+  if (!profile) return form;
+  return {
+    ...form,
+    district: 'district' in form ? profile.district : form.district,
+    tech_name: 'tech_name' in form ? profile.techName : form.tech_name,
+  };
+}
+
+function makeEmptyForms(profile) {
+  return Object.fromEntries(
+    Object.entries(resources).map(([key, item]) => [key, applyProfileToForm(item.empty, profile)]),
+  );
+}
+
 function LocationPicker({ value, onChange }) {
   useMapEvents({
     click(event) {
@@ -149,8 +189,9 @@ function LocationPicker({ value, onChange }) {
 }
 
 function App() {
+  const [profile, setProfile] = useState(readSavedProfile);
   const [active, setActive] = useState('buildings');
-  const [forms, setForms] = useState(() => Object.fromEntries(Object.entries(resources).map(([key, item]) => [key, item.empty])));
+  const [forms, setForms] = useState(() => makeEmptyForms(readSavedProfile()));
   const [records, setRecords] = useState({ buildings: [], poles: [], column_checks: [] });
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
@@ -170,8 +211,21 @@ function App() {
   );
 
   useEffect(() => {
-    loadAll();
-  }, []);
+    if (profile) loadAll();
+  }, [profile]);
+
+  function saveProfile(nextProfile) {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(nextProfile));
+    setProfile(nextProfile);
+    setForms(makeEmptyForms(nextProfile));
+    setMessage(`أهلاً ${nextProfile.techName}. تم تثبيت الاسم والمنطقة داخل البرنامج.`);
+  }
+
+  function changeProfile() {
+    localStorage.removeItem(PROFILE_KEY);
+    setProfile(null);
+    setMessage('');
+  }
 
   async function loadAll() {
     if (!hasSupabaseConfig) {
@@ -256,7 +310,7 @@ function App() {
       const { error } = await supabase.from(current.table).upsert(payload, { onConflict: 'id' });
       if (error) throw error;
 
-      setForms((previous) => ({ ...previous, [active]: current.empty }));
+      setForms((previous) => ({ ...previous, [active]: applyProfileToForm(current.empty, profile) }));
       setPhotoFile(null);
       setMessage(`تم حفظ ${current.singular} بنجاح.`);
       await loadAll();
@@ -285,6 +339,10 @@ function App() {
     );
   }
 
+  if (!profile) {
+    return <LoginPage onSave={saveProfile} />;
+  }
+
   const filteredRows = records[active].filter((row) => JSON.stringify(row).toLowerCase().includes(query.toLowerCase()));
 
   return (
@@ -295,6 +353,15 @@ function App() {
           <h1>مرجع ميداني سريع للبنايات والأعمدة</h1>
         </div>
         <div className="actions">
+          <div className="profilePill" title="بيانات الفني الحالية">
+            <UserRound size={17} />
+            <span>{profile.techName}</span>
+            <strong>{profile.district}</strong>
+          </div>
+          <button className="ghost" type="button" onClick={changeProfile}>
+            <LogOut size={18} />
+            تغيير المستخدم
+          </button>
           <button className="ghost" type="button" onClick={loadAll} disabled={busy}>
             <RefreshCcw size={18} />
             تحديث
@@ -386,6 +453,7 @@ function App() {
                 type={type}
                 options={options}
                 value={form[name]}
+                locked={name === 'district' || name === 'tech_name'}
                 onChange={(value) => updateForm(name, value)}
               />
             ))}
@@ -443,7 +511,44 @@ function App() {
   );
 }
 
-function Field({ name, label, type, options, value, onChange }) {
+function LoginPage({ onSave }) {
+  const [techName, setTechName] = useState('');
+  const [district, setDistrict] = useState('');
+
+  function submit(event) {
+    event.preventDefault();
+    if (!techName.trim() || !district.trim()) return;
+    onSave({ techName: techName.trim(), district: district.trim() });
+  }
+
+  return (
+    <main className="loginPage">
+      <form className="loginCard" onSubmit={submit}>
+        <div className="loginIcon">
+          <UserRound size={30} />
+        </div>
+        <p className="eyebrow">Site Survey Pro</p>
+        <h1>تسجيل دخول الفني</h1>
+        <p className="loginText">أدخل اسمك والمنطقة مرة واحدة. سيتم تثبيتها تلقائياً على كل سجل جديد داخل البرنامج.</p>
+
+        <label>
+          اسم الفني
+          <input autoFocus value={techName} onChange={(event) => setTechName(event.target.value)} placeholder="مثال: Ahmed Ali" />
+        </label>
+        <label>
+          المنطقة
+          <input value={district} onChange={(event) => setDistrict(event.target.value)} placeholder="مثال: Hay Andalus Zone 2" />
+        </label>
+
+        <button className="save" type="submit" disabled={!techName.trim() || !district.trim()}>
+          دخول البرنامج
+        </button>
+      </form>
+    </main>
+  );
+}
+
+function Field({ name, label, type, options, value, locked, onChange }) {
   if (type === 'textarea') {
     return (
       <label className="wide">
@@ -478,6 +583,8 @@ function Field({ name, label, type, options, value, onChange }) {
     <label>
       {label}
       <input
+        readOnly={locked}
+        className={locked ? 'lockedInput' : ''}
         required={name === 'id'}
         type={type}
         step={type === 'number' ? 'any' : undefined}
