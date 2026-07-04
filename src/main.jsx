@@ -311,7 +311,7 @@ function App() {
   const [formDrawerOpen, setFormDrawerOpen] = useState(false);
   const [adminFilters, setAdminFilters] = useState({ district: '', techName: '', type: 'all' });
   const [adminPage, setAdminPage] = useState('data');
-  const [mapHeading, setMapHeading] = useState(null);
+  const [mapRotation, setMapRotation] = useState(0);
 
   const isAdmin = profile?.role === 'admin';
   const current = resources[active];
@@ -365,16 +365,8 @@ function App() {
     if (profile) {
       loadAll();
       requestCurrentLocation(true);
-      enableCompass(false);
     }
   }, [profile]);
-
-  useEffect(() => {
-    return () => {
-      window.removeEventListener('deviceorientationabsolute', handleOrientation);
-      window.removeEventListener('deviceorientation', handleOrientation);
-    };
-  }, []);
 
   function saveProfile(nextProfile) {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(nextProfile));
@@ -505,39 +497,7 @@ function App() {
     }
   }
 
-  function handleOrientation(event) {
-    const heading = typeof event.webkitCompassHeading === 'number'
-      ? event.webkitCompassHeading
-      : typeof event.alpha === 'number'
-        ? 360 - event.alpha
-        : null;
-
-    if (heading !== null) {
-      setMapHeading(Math.round((heading + 360) % 360));
-    }
-  }
-
-  async function enableCompass(showMessage = false) {
-    try {
-      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        const permission = await DeviceOrientationEvent.requestPermission();
-        if (permission !== 'granted') {
-          if (showMessage) setMessage('لم يتم السماح للبوصلة. الخريطة ستبقى باتجاه الشمال.');
-          return;
-        }
-      }
-
-      window.removeEventListener('deviceorientationabsolute', handleOrientation);
-      window.removeEventListener('deviceorientation', handleOrientation);
-      window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-      window.addEventListener('deviceorientation', handleOrientation, true);
-    } catch {
-      if (showMessage) setMessage('البوصلة غير متاحة على هذا المتصفح.');
-    }
-  }
-
   function requestCurrentLocation(silent = false) {
-    enableCompass(!silent);
     if (!navigator.geolocation) {
       if (!silent) setMessage('المتصفح لا يدعم تحديد الموقع.');
       return;
@@ -730,7 +690,7 @@ function App() {
       {message && <div className="notice">{message}</div>}
 
       <section className="workspace">
-        <div className={`mapShell ${mapHeading !== null ? 'autoRotating' : ''}`} style={{ '--map-heading': `${mapHeading || 0}deg` }}>
+        <div className="mapShell manualRotating" style={{ '--map-rotation': `${mapRotation}deg` }}>
           <button className="mapAddButton" type="button" onClick={() => setFormDrawerOpen(true)}>
             <Plus size={18} />
             إضافة بيانات
@@ -754,6 +714,21 @@ function App() {
               موقعي الحالي
             </button>
             <span>{form.latitude}, {form.longitude}</span>
+          </div>
+          <div className="manualRotatePanel">
+            <label>
+              <span>تدوير الخريطة</span>
+              <input
+                type="range"
+                min="0"
+                max="359"
+                value={mapRotation}
+                onInput={(event) => setMapRotation(Number(event.currentTarget.value))}
+                onChange={(event) => setMapRotation(Number(event.target.value))}
+              />
+              <strong>{mapRotation}°</strong>
+            </label>
+            <button type="button" onClick={() => setMapRotation(0)}>0°</button>
           </div>
         </div>
 
