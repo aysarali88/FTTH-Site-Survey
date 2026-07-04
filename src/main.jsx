@@ -151,17 +151,39 @@ const labels = {
 const markerIcons = {
   buildings: L.divIcon({
     className: '',
-    html: '<div class="surveyMarker buildingMarker">🏢</div>',
-    iconSize: [34, 34],
-    iconAnchor: [17, 34],
-    popupAnchor: [0, -30],
+    html: `
+      <div class="surveyMarker buildingMarker">
+        <svg viewBox="0 0 96 80" aria-hidden="true">
+          <path d="M14 72h68" stroke="#3ccf72" stroke-width="8" stroke-linecap="round"/>
+          <path d="M21 37 48 13l27 24v35H21z" fill="#f2a15f"/>
+          <path d="M11 41 48 8l37 33" fill="none" stroke="#ef4b37" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="34" y="45" width="17" height="27" rx="2" fill="#8b5a43"/>
+          <circle cx="47" cy="58" r="1.8" fill="#3a2a24"/>
+          <rect x="58" y="43" width="17" height="15" rx="2" fill="#54a9df"/>
+          <path d="M21 37v-19h11v9" fill="#a66a43"/>
+        </svg>
+      </div>
+    `,
+    iconSize: [48, 42],
+    iconAnchor: [24, 42],
+    popupAnchor: [0, -38],
   }),
   poles: L.divIcon({
     className: '',
-    html: '<div class="surveyMarker poleMarker">▮</div>',
-    iconSize: [22, 42],
-    iconAnchor: [11, 42],
-    popupAnchor: [0, -38],
+    html: `
+      <div class="surveyMarker poleMarker">
+        <svg viewBox="0 0 64 110" aria-hidden="true">
+          <path d="M32 28v78" stroke="#050505" stroke-width="7" stroke-linecap="square"/>
+          <path d="M5 25h54" stroke="#050505" stroke-width="5" stroke-linecap="square"/>
+          <path d="M32 28 14 25M32 28l18-3" stroke="#050505" stroke-width="4" stroke-linecap="round"/>
+          <path d="M10 17v8M52 17v8" stroke="#050505" stroke-width="5" stroke-linecap="square"/>
+          <path d="M17 19h4M45 19h4" stroke="#050505" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+      </div>
+    `,
+    iconSize: [38, 62],
+    iconAnchor: [19, 62],
+    popupAnchor: [0, -58],
   }),
   column_checks: L.divIcon({
     className: '',

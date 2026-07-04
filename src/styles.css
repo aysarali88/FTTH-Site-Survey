@@ -347,29 +347,25 @@ button:disabled {
 
 .surveyMarker {
   align-items: center;
-  border: 2px solid #ffffff;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.24);
   display: flex;
+  filter: drop-shadow(0 7px 9px rgba(15, 23, 42, 0.28));
   justify-content: center;
 }
 
+.surveyMarker svg {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
 .buildingMarker {
-  background: #dc2626;
-  border-radius: 8px;
-  color: #ffffff;
-  font-size: 18px;
-  height: 34px;
-  width: 34px;
+  height: 42px;
+  width: 48px;
 }
 
 .poleMarker {
-  background: #0f172a;
-  border-radius: 999px;
-  color: #ffffff;
-  font-size: 30px;
-  height: 42px;
-  line-height: 1;
-  width: 22px;
+  height: 62px;
+  width: 38px;
 }
 
 .checkMarker {
