@@ -1,0 +1,432 @@
+:root {
+  color: #172033;
+  background: #f5f7fb;
+  font-family: Inter, "Segoe UI", Tahoma, Arial, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: #2563eb;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.app {
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.topbar {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.eyebrow,
+.panelHeader p {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+}
+
+h1,
+h2 {
+  margin: 0;
+}
+
+h1 {
+  color: #0f172a;
+  font-size: clamp(26px, 3vw, 42px);
+  line-height: 1.15;
+}
+
+h2 {
+  color: #0f172a;
+  font-size: 21px;
+}
+
+.actions,
+.tabs,
+.mapControls,
+.recordsHeader {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+button {
+  align-items: center;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 8px;
+  justify-content: center;
+  min-height: 42px;
+  padding: 10px 14px;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.ghost {
+  background: #e8eef8;
+  color: #1e293b;
+}
+
+.stats {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+.stats article {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: auto 1fr auto;
+  min-height: 70px;
+  padding: 14px 16px;
+}
+
+.stats span {
+  color: #475569;
+  font-weight: 800;
+}
+
+.stats strong {
+  color: #0f172a;
+  font-size: 24px;
+}
+
+.tabs {
+  flex-wrap: wrap;
+  margin: 10px 0 14px;
+}
+
+.tabs button {
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  color: #334155;
+}
+
+.tabs button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.notice {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  color: #9a3412;
+  font-weight: 700;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+}
+
+.workspace {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(380px, 0.8fr);
+}
+
+.mapShell,
+.panel,
+.records {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.mapShell {
+  min-height: 640px;
+  overflow: hidden;
+  position: relative;
+}
+
+.map {
+  height: 100%;
+  min-height: 640px;
+  width: 100%;
+}
+
+.mapControls {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  bottom: 16px;
+  box-shadow: 0 16px 35px rgba(15, 23, 42, 0.15);
+  direction: ltr;
+  left: 16px;
+  padding: 10px;
+  position: absolute;
+  z-index: 500;
+}
+
+.mapControls button {
+  background: #0f172a;
+  color: #ffffff;
+  min-height: 38px;
+}
+
+.mapControls span {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.panel {
+  padding: 18px;
+}
+
+.panelHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.coordinateGrid,
+.fieldGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fieldGrid {
+  margin-top: 12px;
+}
+
+label {
+  color: #334155;
+  display: grid;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 7px;
+}
+
+input,
+select,
+textarea {
+  background: #f8fafc;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  color: #0f172a;
+  min-height: 42px;
+  outline: none;
+  padding: 10px 11px;
+  width: 100%;
+}
+
+textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+.wide,
+.photoBox,
+.save {
+  grid-column: 1 / -1;
+}
+
+.check {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  min-height: 42px;
+  padding: 10px 12px;
+}
+
+.check input {
+  height: 18px;
+  min-height: auto;
+  width: 18px;
+}
+
+.photoBox {
+  align-items: center;
+  border: 1px dashed #94a3b8;
+  border-radius: 8px;
+  color: #475569;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+  min-height: 76px;
+  padding: 14px;
+  text-align: center;
+}
+
+.photoBox input {
+  display: none;
+}
+
+.save {
+  background: #0f172a;
+  color: #ffffff;
+  margin-top: 14px;
+  width: 100%;
+}
+
+.records {
+  margin-top: 16px;
+  padding: 16px;
+}
+
+.recordsHeader {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.search {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  display: flex;
+  gap: 8px;
+  min-width: 280px;
+  padding-inline: 10px;
+}
+
+.search input {
+  border: 0;
+  box-shadow: none;
+  min-height: 40px;
+  padding-inline: 0;
+}
+
+.tableWrap {
+  overflow: auto;
+}
+
+table {
+  border-collapse: collapse;
+  min-width: 980px;
+  width: 100%;
+}
+
+th,
+td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+td {
+  color: #1e293b;
+  font-size: 14px;
+}
+
+.empty {
+  color: #64748b;
+  font-weight: 800;
+  text-align: center;
+}
+
+@media (max-width: 980px) {
+  .app {
+    padding: 14px;
+  }
+
+  .topbar,
+  .recordsHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .workspace,
+  .stats {
+    grid-template-columns: 1fr;
+  }
+
+  .mapShell,
+  .map {
+    min-height: 430px;
+  }
+
+  .panel {
+    padding: 14px;
+  }
+
+  .search {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 620px) {
+  .coordinateGrid,
+  .fieldGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .tabs button {
+    flex: 1 1 100%;
+  }
+
+  .mapControls {
+    align-items: stretch;
+    flex-direction: column;
+    right: 12px;
+    left: 12px;
+  }
+
+  th,
+  td {
+    padding: 10px;
+  }
+}
