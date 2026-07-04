@@ -247,6 +247,29 @@ button:disabled {
   width: 100%;
 }
 
+.fixedPin {
+  color: #dc2626;
+  filter: drop-shadow(0 8px 10px rgba(15, 23, 42, 0.35));
+  left: 50%;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, calc(-100% + 4px));
+  z-index: 520;
+}
+
+.fixedPin::after {
+  background: rgba(15, 23, 42, 0.22);
+  border-radius: 999px;
+  bottom: -3px;
+  content: "";
+  height: 8px;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%);
+  width: 22px;
+}
+
 .mapControls {
   background: rgba(255, 255, 255, 0.95);
   border: 1px solid #e2e8f0;
@@ -281,6 +304,14 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   margin-bottom: 18px;
+}
+
+.autoId {
+  color: #64748b;
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 800;
+  margin-top: 6px;
 }
 
 .coordinateGrid,
@@ -467,7 +498,7 @@ td {
 
   .mapShell,
   .map {
-    min-height: 430px;
+    min-height: 58vh;
   }
 
   .panel {
@@ -481,6 +512,14 @@ td {
 }
 
 @media (max-width: 620px) {
+  .app {
+    padding: 10px;
+  }
+
+  h1 {
+    font-size: 24px;
+  }
+
   .coordinateGrid,
   .fieldGrid {
     grid-template-columns: 1fr;
@@ -493,8 +532,18 @@ td {
   .mapControls {
     align-items: stretch;
     flex-direction: column;
+    gap: 8px;
     right: 12px;
     left: 12px;
+  }
+
+  .mapControls span {
+    text-align: center;
+  }
+
+  .panel,
+  .records {
+    padding: 12px;
   }
 
   th,

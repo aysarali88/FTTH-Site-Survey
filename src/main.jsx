@@ -9,22 +9,12 @@ import {
   MapPin,
   RefreshCcw,
   Search,
-  UploadCloud,
   UserRound,
 } from 'lucide-react';
-import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet';
-import L from 'leaflet';
+import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import './styles.css';
 import { hasSupabaseConfig, supabase, SUPABASE_BUCKET } from './supabaseClient';
-
-const markerIcon = new L.Icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
 
 const today = new Date().toISOString().slice(0, 10);
 const defaultLocation = { latitude: 32.8872, longitude: 13.1913 };
@@ -37,7 +27,7 @@ const resources = {
     table: 'buildings',
     accent: '#2563eb',
     empty: {
-      id: '',
+      id: null,
       latitude: defaultLocation.latitude,
       longitude: defaultLocation.longitude,
       building_type: '',
@@ -52,11 +42,10 @@ const resources = {
       photo_url: '',
     },
     fields: [
-      ['id', 'ID', 'text'],
-      ['building_type', 'Building type', 'select', ['Residential', 'Commercial', 'Government', 'Mixed', 'Other']],
+      ['building_type', 'Building type', 'select', ['تجاري', 'سكني', 'حكومي', 'تجاري/سكني', 'تجاري/حكومي', 'ارض فارغه']],
       ['floor_number', 'Floor number', 'number'],
       ['users_number', 'Users number', 'number'],
-      ['building_status', 'Building status', 'select', ['Ready', 'Under construction', 'Blocked', 'Need revisit']],
+      ['building_status', 'Building status', 'select', ['جاهزه', 'غير جاهزه', 'بنايه متضرره']],
       ['district', 'district', 'text'],
       ['tech_name', 'tech name', 'text'],
       ['survey_date', 'date', 'date'],
@@ -71,7 +60,7 @@ const resources = {
     table: 'poles',
     accent: '#059669',
     empty: {
-      id: '',
+      id: null,
       latitude: defaultLocation.latitude,
       longitude: defaultLocation.longitude,
       pole_owner: '',
@@ -86,11 +75,10 @@ const resources = {
       photo_url: '',
     },
     fields: [
-      ['id', 'ID', 'text'],
-      ['pole_owner', 'Pole owner', 'text'],
-      ['pole_type', 'Pole type', 'select', ['Concrete', 'Wood', 'Steel', 'Existing utility', 'Other']],
-      ['pole_length', 'Pole length', 'number'],
-      ['pole_status', 'Pole Status', 'select', ['Good', 'Damaged', 'Needs replacement', 'Blocked']],
+      ['pole_owner', 'Pole owner', 'select', ['هاتف ليبيا', 'GECOL']],
+      ['pole_length', 'Pole length', 'select', ['12', '9', '6', '4.5']],
+      ['pole_type', 'Pole type', 'select', ['خشبي', 'حديدي']],
+      ['pole_status', 'Pole Status', 'select', ['جيد', 'غير جيد']],
       ['district', 'district', 'text'],
       ['tech_name', 'tech name', 'text'],
       ['survey_date', 'date', 'date'],
@@ -105,24 +93,23 @@ const resources = {
     table: 'column_checks',
     accent: '#7c3aed',
     empty: {
-      id: '',
+      id: null,
       latitude: defaultLocation.latitude,
       longitude: defaultLocation.longitude,
       district: '',
       tech_name: '',
-      has_objection: false,
-      is_existing: false,
-      is_planted: false,
+      has_objection: 'لا',
+      is_existing: 'لا',
+      is_planted: 'لا',
       notes: '',
       photo_url: '',
     },
     fields: [
-      ['id', 'ID', 'text'],
       ['district', 'district', 'text'],
       ['tech_name', 'tech name', 'text'],
-      ['has_objection', 'هل عليه اعتراض', 'checkbox'],
-      ['is_existing', 'هل هو موجود', 'checkbox'],
-      ['is_planted', 'هل تم زرعه', 'checkbox'],
+      ['has_objection', 'هل عليه اعتراض', 'select', ['نعم', 'لا']],
+      ['is_planted', 'هل تم زرعه', 'select', ['نعم', 'لا']],
+      ['is_existing', 'هل هو موجود', 'select', ['نعم', 'لا']],
       ['notes', 'ملاحظة', 'textarea'],
     ],
     columns: ['id', 'district', 'tech_name', 'has_objection', 'is_existing', 'is_planted', 'notes'],
@@ -176,16 +163,38 @@ function makeEmptyForms(profile) {
   );
 }
 
-function LocationPicker({ value, onChange }) {
+function MapCenterSync({ value, onChange }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const center = map.getCenter();
+    if (Math.abs(center.lat - Number(value.latitude)) > 0.000001 || Math.abs(center.lng - Number(value.longitude)) > 0.000001) {
+      map.setView([Number(value.latitude), Number(value.longitude)], map.getZoom(), { animate: true });
+    }
+  }, [map, value.latitude, value.longitude]);
+
   useMapEvents({
-    click(event) {
+    moveend(event) {
+      const center = event.target.getCenter();
       onChange({
-        latitude: Number(event.latlng.lat.toFixed(7)),
-        longitude: Number(event.latlng.lng.toFixed(7)),
+        latitude: Number(center.lat.toFixed(7)),
+        longitude: Number(center.lng.toFixed(7)),
       });
     },
   });
-  return <Marker icon={markerIcon} position={[value.latitude, value.longitude]} />;
+
+  return null;
+}
+
+function makeRecordId(type) {
+  const prefix = type === 'buildings' ? 'BLD' : type === 'poles' ? 'POL' : 'COL';
+  const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `${prefix}-${stamp}-${suffix}`;
+}
+
+function yesNoToBoolean(value) {
+  return value === true || value === 'نعم';
 }
 
 function App() {
@@ -286,21 +295,21 @@ function App() {
       setMessage('لا يمكن الحفظ قبل إضافة إعدادات Supabase.');
       return;
     }
-    if (!form.id.trim()) {
-      setMessage('حقل ID مطلوب.');
-      return;
-    }
-
     setBusy(true);
     try {
-      const photoUrl = await uploadPhoto(form.id.trim());
+      const recordId = form.id || makeRecordId(active);
+      const photoUrl = await uploadPhoto(recordId);
       const payload = {
         ...form,
-        id: form.id.trim(),
+        id: recordId,
         latitude: Number(form.latitude),
         longitude: Number(form.longitude),
         photo_url: photoUrl,
       };
+
+      ['has_objection', 'is_existing', 'is_planted'].forEach((key) => {
+        if (key in payload) payload[key] = yesNoToBoolean(payload[key]);
+      });
 
       ['floor_number', 'users_number'].forEach((key) => {
         if (key in payload) payload[key] = payload[key] === '' ? null : Number(payload[key]);
@@ -326,6 +335,7 @@ function App() {
       setMessage('المتصفح لا يدعم تحديد الموقع.');
       return;
     }
+    setMessage('جار تحديد الموقع...');
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setLocation({
@@ -335,7 +345,7 @@ function App() {
         setMessage('تم استخدام موقع الجهاز الحالي.');
       },
       () => setMessage('لم يتم السماح بالوصول إلى موقع الجهاز. يمكنك الضغط على الخريطة يدوياً.'),
-      { enableHighAccuracy: true, timeout: 10000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
     );
   }
 
@@ -413,8 +423,11 @@ function App() {
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            <LocationPicker value={form} onChange={setLocation} />
+            <MapCenterSync value={form} onChange={setLocation} />
           </MapContainer>
+          <div className="fixedPin" aria-hidden="true">
+            <MapPin size={36} />
+          </div>
           <div className="mapControls">
             <button type="button" onClick={useCurrentLocation}>
               <LocateFixed size={17} />
@@ -429,6 +442,7 @@ function App() {
             <div>
               <p>سجل جديد</p>
               <h2>{current.title}</h2>
+              <span className="autoId">ID تلقائي عند الحفظ</span>
             </div>
             <Camera color={current.accent} />
           </div>
@@ -460,8 +474,8 @@ function App() {
           </div>
 
           <label className="photoBox">
-            <UploadCloud size={22} />
-            <span>{photoFile ? photoFile.name : 'إضافة صورة للسجل'}</span>
+            <Camera size={22} />
+            <span>{photoFile ? photoFile.name : 'التقاط صورة بالكاميرا'}</span>
             <input type="file" accept="image/*" capture="environment" onChange={(event) => setPhotoFile(event.target.files?.[0] || null)} />
           </label>
 
