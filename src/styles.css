@@ -241,6 +241,16 @@ button:disabled {
   position: relative;
 }
 
+.mapAddButton {
+  background: #0f172a;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.22);
+  color: #ffffff;
+  left: 16px;
+  position: absolute;
+  top: 16px;
+  z-index: 540;
+}
+
 .map {
   height: 100%;
   min-height: 640px;
@@ -315,6 +325,33 @@ button:disabled {
   padding: 8px 10px;
 }
 
+.rotationSlider {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  display: flex;
+  gap: 8px;
+  min-height: 38px;
+  padding: 6px 10px;
+}
+
+.rotationSlider span {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.rotationSlider input {
+  accent-color: #0f172a;
+  border: 0;
+  box-shadow: none;
+  min-height: auto;
+  padding: 0;
+  width: 120px;
+}
+
 .mapControls span {
   color: #334155;
   font-size: 13px;
@@ -330,6 +367,20 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   margin-bottom: 18px;
+}
+
+.panelHeaderActions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.closePanel {
+  background: #e8eef8;
+  color: #0f172a;
+  display: none;
+  min-height: 38px;
+  padding: 8px;
 }
 
 .autoId {
@@ -539,20 +590,60 @@ td {
 
 @media (max-width: 620px) {
   .app {
-    padding: 10px;
+    padding: 0;
+  }
+
+  .topbar,
+  .stats,
+  .tabs,
+  .notice,
+  .records {
+    margin-inline: 10px;
+  }
+
+  .topbar {
+    padding-top: 10px;
   }
 
   h1 {
     font-size: 24px;
   }
 
-  .coordinateGrid,
-  .fieldGrid {
-    grid-template-columns: 1fr;
+  .stats {
+    display: none;
+  }
+
+  .tabs {
+    overflow: auto;
+    padding-bottom: 4px;
+    scroll-snap-type: x mandatory;
   }
 
   .tabs button {
-    flex: 1 1 100%;
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  .workspace {
+    display: block;
+  }
+
+  .mapShell,
+  .map {
+    border-radius: 0;
+    min-height: calc(100vh - 185px);
+  }
+
+  .mapAddButton {
+    left: 12px;
+    right: 12px;
+    top: 12px;
+    width: auto;
+  }
+
+  .coordinateGrid,
+  .fieldGrid {
+    grid-template-columns: 1fr;
   }
 
   .mapControls {
@@ -565,14 +656,48 @@ td {
 
   .rotationControls {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 44px minmax(0, 1fr) 82px 44px;
+  }
+
+  .rotationSlider {
+    min-width: 0;
+  }
+
+  .rotationSlider span {
+    display: none;
+  }
+
+  .rotationSlider input {
+    width: 100%;
   }
 
   .mapControls span {
     text-align: center;
   }
 
-  .panel,
+  .panel {
+    border-radius: 12px 12px 0 0;
+    bottom: 0;
+    box-shadow: 0 -20px 55px rgba(15, 23, 42, 0.22);
+    left: 0;
+    max-height: 86vh;
+    overflow: auto;
+    padding: 14px;
+    position: fixed;
+    right: 0;
+    transform: translateY(105%);
+    transition: transform 180ms ease;
+    z-index: 1000;
+  }
+
+  .panel.open {
+    transform: translateY(0);
+  }
+
+  .closePanel {
+    display: inline-flex;
+  }
+
   .records {
     padding: 12px;
   }

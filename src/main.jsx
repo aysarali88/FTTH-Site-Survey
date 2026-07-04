@@ -8,11 +8,13 @@ import {
   LocateFixed,
   LogOut,
   MapPin,
+  Plus,
   RefreshCcw,
   RotateCcw,
   RotateCw,
   Search,
   UserRound,
+  X,
 } from 'lucide-react';
 import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -210,6 +212,7 @@ function App() {
   const [message, setMessage] = useState('');
   const [photoFile, setPhotoFile] = useState(null);
   const [mapRotation, setMapRotation] = useState(0);
+  const [formDrawerOpen, setFormDrawerOpen] = useState(false);
 
   const current = resources[active];
   const form = forms[active];
@@ -418,6 +421,7 @@ function App() {
             onClick={() => {
               setActive(key);
               setPhotoFile(null);
+              setFormDrawerOpen(true);
             }}
           >
             {item.title}
@@ -429,6 +433,10 @@ function App() {
 
       <section className="workspace">
         <div className="mapShell" style={{ '--map-rotation': `${mapRotation}deg` }}>
+          <button className="mapAddButton" type="button" onClick={() => setFormDrawerOpen(true)}>
+            <Plus size={18} />
+            إضافة بيانات
+          </button>
           <MapContainer center={[form.latitude, form.longitude]} zoom={15} scrollWheelZoom className="map">
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -448,7 +456,18 @@ function App() {
               <button type="button" onClick={() => rotateMap(-15)} title="تدوير يسار">
                 <RotateCcw size={16} />
               </button>
-              <button type="button" onClick={() => setMapRotation(0)} title="إرجاع الشمال">
+              <label className="rotationSlider">
+                <span>تدوير باليد</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="359"
+                  value={mapRotation}
+                  onChange={(event) => setMapRotation(Number(event.target.value))}
+                  aria-label="تدوير الخريطة باليد"
+                />
+              </label>
+              <button className="northButton" type="button" onClick={() => setMapRotation(0)} title="إرجاع الشمال">
                 <Compass size={16} />
                 {mapRotation}°
               </button>
@@ -460,14 +479,19 @@ function App() {
           </div>
         </div>
 
-        <form className="panel" onSubmit={saveRecord}>
+        <form className={`panel ${formDrawerOpen ? 'open' : ''}`} onSubmit={saveRecord}>
           <div className="panelHeader">
             <div>
               <p>سجل جديد</p>
               <h2>{current.title}</h2>
               <span className="autoId">ID تلقائي عند الحفظ</span>
             </div>
-            <Camera color={current.accent} />
+            <div className="panelHeaderActions">
+              <Camera color={current.accent} />
+              <button className="closePanel" type="button" onClick={() => setFormDrawerOpen(false)} aria-label="إغلاق النموذج">
+                <X size={18} />
+              </button>
+            </div>
           </div>
 
           <div className="coordinateGrid">
