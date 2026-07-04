@@ -293,12 +293,6 @@ button:disabled {
   width: 100%;
 }
 
-.mapShell.manualRotating .leaflet-map-pane {
-  rotate: var(--map-rotation, 0deg);
-  scale: 1.35;
-  transform-origin: 50% 50%;
-}
-
 .fixedPin {
   color: #dc2626;
   filter: drop-shadow(0 8px 10px rgba(15, 23, 42, 0.35));
@@ -347,48 +341,30 @@ button:disabled {
   font-weight: 800;
 }
 
-.manualRotatePanel {
+.leaflet-control-rotate {
+  border: 0 !important;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.2);
+}
+
+.leaflet-control-rotate-toggle {
   align-items: center;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  bottom: 16px;
-  box-shadow: 0 16px 35px rgba(15, 23, 42, 0.15);
-  direction: rtl;
-  display: flex;
-  gap: 10px;
-  padding: 10px;
-  position: absolute;
-  right: 16px;
-  z-index: 500;
+  background: #ffffff !important;
+  border-radius: 8px !important;
+  color: #0f172a !important;
+  display: flex !important;
+  height: 42px !important;
+  justify-content: center;
+  width: 42px !important;
 }
 
-.manualRotatePanel label {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-}
-
-.manualRotatePanel span,
-.manualRotatePanel strong {
-  color: #334155;
-  font-size: 12px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.manualRotatePanel input {
-  accent-color: #0f172a;
-  min-height: auto;
-  padding: 0;
-  width: 180px;
-}
-
-.manualRotatePanel button {
-  background: #0f172a;
-  color: #ffffff;
-  min-height: 36px;
-  padding: 7px 10px;
+.leaflet-control-rotate-arrow {
+  border: solid #0f172a;
+  border-width: 0 3px 3px 0;
+  display: inline-block;
+  height: 13px;
+  margin-top: -3px;
+  transform: rotate(-135deg);
+  width: 13px;
 }
 
 .panel {
@@ -809,32 +785,6 @@ td {
     left: 14px;
     padding: 0;
     right: auto;
-  }
-
-  .manualRotatePanel {
-    bottom: 78px;
-    left: 14px;
-    padding: 8px 10px;
-    right: 14px;
-  }
-
-  .manualRotatePanel label {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .manualRotatePanel span {
-    display: none;
-  }
-
-  .manualRotatePanel input {
-    width: 100%;
-  }
-
-  .manualRotatePanel button {
-    border-radius: 999px;
-    min-height: 38px;
-    padding: 7px 12px;
   }
 
   .mapControls button {

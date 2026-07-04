@@ -19,6 +19,7 @@ import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 're
 import L from 'leaflet';
 import * as XLSX from 'xlsx';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet-rotate';
 import './styles.css';
 import { hasSupabaseConfig, supabase, SUPABASE_BUCKET } from './supabaseClient';
 
@@ -311,7 +312,6 @@ function App() {
   const [formDrawerOpen, setFormDrawerOpen] = useState(false);
   const [adminFilters, setAdminFilters] = useState({ district: '', techName: '', type: 'all' });
   const [adminPage, setAdminPage] = useState('data');
-  const [mapRotation, setMapRotation] = useState(0);
 
   const isAdmin = profile?.role === 'admin';
   const current = resources[active];
@@ -690,12 +690,22 @@ function App() {
       {message && <div className="notice">{message}</div>}
 
       <section className="workspace">
-        <div className="mapShell manualRotating" style={{ '--map-rotation': `${mapRotation}deg` }}>
+        <div className="mapShell">
           <button className="mapAddButton" type="button" onClick={() => setFormDrawerOpen(true)}>
             <Plus size={18} />
             إضافة بيانات
           </button>
-          <MapContainer center={[form.latitude, form.longitude]} zoom={18} maxZoom={22} scrollWheelZoom className="map">
+          <MapContainer
+            center={[form.latitude, form.longitude]}
+            zoom={18}
+            maxZoom={22}
+            scrollWheelZoom
+            className="map"
+            rotate
+            touchRotate
+            rotateControl={{ closeOnZeroBearing: false, position: 'topright' }}
+            bearing={0}
+          >
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               maxZoom={22}
@@ -714,21 +724,6 @@ function App() {
               موقعي الحالي
             </button>
             <span>{form.latitude}, {form.longitude}</span>
-          </div>
-          <div className="manualRotatePanel">
-            <label>
-              <span>تدوير الخريطة</span>
-              <input
-                type="range"
-                min="0"
-                max="359"
-                value={mapRotation}
-                onInput={(event) => setMapRotation(Number(event.currentTarget.value))}
-                onChange={(event) => setMapRotation(Number(event.target.value))}
-              />
-              <strong>{mapRotation}°</strong>
-            </label>
-            <button type="button" onClick={() => setMapRotation(0)}>0°</button>
           </div>
         </div>
 
