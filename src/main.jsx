@@ -621,7 +621,7 @@ function App() {
         </article>
         <article>
           <CheckCircle2 size={19} />
-          <span>فحص الأعمدة</span>
+          <span>زراعة عمود</span>
           <strong>{totals.column_checks}</strong>
         </article>
       </section>
