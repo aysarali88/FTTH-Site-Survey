@@ -261,6 +261,43 @@ function normalizeRow(row, type) {
   };
 }
 
+function escapeXml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
+}
+
+function escapeCdata(value) {
+  return String(value ?? '').replaceAll(']]>', ']]]]><![CDATA[>');
+}
+
+function downloadTextFile(content, fileName, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function kmlTypeLabel(type) {
+  if (type === 'buildings') return 'Building';
+  if (type === 'poles') return 'Pole';
+  return 'New Pole Planting';
+}
+
+function kmlStyleId(type) {
+  if (type === 'buildings') return 'buildingStyle';
+  if (type === 'poles') return 'poleStyle';
+  return 'plantingStyle';
+}
+
 function MapCenterSync({ value, onChange }) {
   const map = useMap();
 
@@ -608,6 +645,66 @@ function App() {
     XLSX.writeFile(workbook, `site-survey-${formatDate(new Date())}.xlsx`);
   }
 
+  function exportKml() {
+    const rows = allVisibleRows.filter((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)));
+
+    const placemarks = rows
+      .map((row) => {
+        const label = kmlTypeLabel(row._type);
+        const description = [
+          `<b>Type:</b> ${escapeXml(label)}`,
+          `<b>ID:</b> ${escapeXml(row.id)}`,
+          `<b>District:</b> ${escapeXml(row.district || '-')}`,
+          `<b>Technician:</b> ${escapeXml(row.tech_name || '-')}`,
+          `<b>Date:</b> ${escapeXml(row.record_date || '-')}`,
+          `<b>Time:</b> ${escapeXml(row.record_time || '-')}`,
+          row.notes ? `<b>Notes:</b> ${escapeXml(row.notes)}` : '',
+          row.photo_url ? `<b>Photo:</b> <a href="${escapeXml(row.photo_url)}">Open photo</a>` : '',
+        ].filter(Boolean).join('<br/>');
+
+        return `
+      <Placemark>
+        <name>${escapeXml(`${label} - ${row.id}`)}</name>
+        <styleUrl>#${kmlStyleId(row._type)}</styleUrl>
+        <description><![CDATA[${escapeCdata(description)}]]></description>
+        <Point>
+          <coordinates>${Number(row.longitude)},${Number(row.latitude)},0</coordinates>
+        </Point>
+      </Placemark>`;
+      })
+      .join('');
+
+    const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Site Survey Filtered Export</name>
+    <Style id="buildingStyle">
+      <IconStyle>
+        <color>ff2626dc</color>
+        <scale>1.2</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href></Icon>
+      </IconStyle>
+    </Style>
+    <Style id="poleStyle">
+      <IconStyle>
+        <color>ff111111</color>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon>
+      </IconStyle>
+    </Style>
+    <Style id="plantingStyle">
+      <IconStyle>
+        <color>ff7c3aed</color>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/shapes/target.png</href></Icon>
+      </IconStyle>
+    </Style>${placemarks}
+  </Document>
+</kml>`;
+
+    downloadTextFile(kml, `site-survey-${formatDate(new Date())}.kml`, 'application/vnd.google-earth.kml+xml;charset=utf-8');
+  }
+
   if (!profile) {
     return <LoginPage onSave={saveProfile} />;
   }
@@ -634,10 +731,16 @@ function App() {
             Refresh
           </button>
           {isAdmin && (
-            <button className="ghost" type="button" onClick={exportExcel}>
-              <Download size={18} />
-              Excel
-            </button>
+            <>
+              <button className="ghost" type="button" onClick={exportExcel}>
+                <Download size={18} />
+                Excel
+              </button>
+              <button className="ghost" type="button" onClick={exportKml}>
+                <Download size={18} />
+                KML
+              </button>
+            </>
           )}
         </div>
       </header>
