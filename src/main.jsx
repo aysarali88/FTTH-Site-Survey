@@ -278,6 +278,24 @@ function MapCenterSync({ value, onChange }) {
   return null;
 }
 
+function MapResizeSync({ expanded }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const resize = () => map.invalidateSize({ animate: false });
+    resize();
+    const first = window.setTimeout(resize, 80);
+    const second = window.setTimeout(resize, 250);
+
+    return () => {
+      window.clearTimeout(first);
+      window.clearTimeout(second);
+    };
+  }, [map, expanded]);
+
+  return null;
+}
+
 function SurveyMarkers({ groupedRecords, onDelete, canDelete }) {
   return Object.entries(groupedRecords).flatMap(([type, rows]) =>
     rows.map((row) => (
@@ -370,6 +388,11 @@ function App() {
       requestCurrentLocation(true);
     }
   }, [profile]);
+
+  useEffect(() => {
+    document.body.classList.toggle('map-fullscreen-active', mapExpanded);
+    return () => document.body.classList.remove('map-fullscreen-active');
+  }, [mapExpanded]);
 
   function saveProfile(nextProfile) {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(nextProfile));
@@ -725,6 +748,7 @@ function App() {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             <MapCenterSync value={form} onChange={setLocation} />
+            <MapResizeSync expanded={mapExpanded} />
             <SurveyMarkers groupedRecords={scopedRecords} onDelete={deleteRecord} canDelete />
           </MapContainer>
           <div className="fixedPin" aria-hidden="true">
