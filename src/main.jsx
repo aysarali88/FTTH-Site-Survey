@@ -30,9 +30,9 @@ const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || '1234';
 
 const resources = {
   buildings: {
-    title: 'إضافة بناية',
+    title: 'Buildings',
     singular: 'بناية',
-    plural: 'البنايات',
+    plural: 'Buildings',
     table: 'buildings',
     accent: '#dc2626',
     empty: {
@@ -63,9 +63,9 @@ const resources = {
     columns: ['id', 'building_type', 'floor_number', 'users_number', 'building_status', 'district', 'tech_name', 'record_status', 'record_date'],
   },
   poles: {
-    title: 'إضافة عمود',
+    title: 'Poles',
     singular: 'عمود',
-    plural: 'الأعمدة',
+    plural: 'Poles',
     table: 'poles',
     accent: '#059669',
     empty: {
@@ -96,9 +96,9 @@ const resources = {
     columns: ['id', 'pole_owner', 'pole_type', 'pole_length', 'pole_status', 'district', 'tech_name', 'record_status', 'record_date'],
   },
   column_checks: {
-    title: 'زراعة عمود جديد',
-    singular: 'زراعة عمود جديد',
-    plural: 'زراعة عمود جديد',
+    title: 'New Pole Planting',
+    singular: 'New Pole Planting',
+    plural: 'New Pole Planting',
     table: 'column_checks',
     accent: '#7c3aed',
     empty: {
@@ -522,7 +522,7 @@ function App() {
     const workbook = XLSX.utils.book_new();
 
     const sheets = {
-      'البنايات': scopedRecords.buildings.map((row) => ({
+      Buildings: scopedRecords.buildings.map((row) => ({
         ID: row.id,
         Latitude: row.latitude,
         Longitude: row.longitude,
@@ -537,7 +537,7 @@ function App() {
         Notes: row.notes || '',
         'Photo URL': row.photo_url || '',
       })),
-      'الأعمدة': scopedRecords.poles.map((row) => ({
+      Poles: scopedRecords.poles.map((row) => ({
         ID: row.id,
         Latitude: row.latitude,
         Longitude: row.longitude,
@@ -552,7 +552,7 @@ function App() {
         Notes: row.notes || '',
         'Photo URL': row.photo_url || '',
       })),
-      'زراعة عمود جديد': scopedRecords.column_checks.map((row) => ({
+      'New Pole Planting': scopedRecords.column_checks.map((row) => ({
         ID: row.id,
         Latitude: row.latitude,
         Longitude: row.longitude,
@@ -584,7 +584,7 @@ function App() {
       <header className="topbar">
         <div>
           <p className="eyebrow">Site Survey Pro</p>
-          <h1>{isAdmin ? 'لوحة تحكم الأدمن' : 'مرجع ميداني سريع للبنايات والأعمدة'}</h1>
+          <h1>{isAdmin ? 'Admin Dashboard' : 'Site Survey Map'}</h1>
         </div>
         <div className="actions">
           <div className="profilePill" title="بيانات المستخدم الحالية">
@@ -594,11 +594,11 @@ function App() {
           </div>
           <button className="ghost" type="button" onClick={changeProfile}>
             <LogOut size={18} />
-            تغيير المستخدم
+            Change User
           </button>
           <button className="ghost" type="button" onClick={loadAll} disabled={busy}>
             <RefreshCcw size={18} />
-            تحديث
+            Refresh
           </button>
           {isAdmin && (
             <button className="ghost" type="button" onClick={exportExcel}>
@@ -612,17 +612,17 @@ function App() {
       <section className="stats">
         <article>
           <ClipboardList size={19} />
-          <span>البنايات</span>
+          <span>Buildings</span>
           <strong>{totals.buildings}</strong>
         </article>
         <article>
           <MapPin size={19} />
-          <span>الأعمدة</span>
+          <span>Poles</span>
           <strong>{totals.poles}</strong>
         </article>
         <article>
           <CheckCircle2 size={19} />
-          <span>زراعة عمود</span>
+          <span>New Pole Planting</span>
           <strong>{totals.column_checks}</strong>
         </article>
       </section>
@@ -630,10 +630,10 @@ function App() {
       {isAdmin && (
         <section className="adminPages" aria-label="Admin pages">
           <button type="button" className={adminPage === 'data' ? 'active' : ''} onClick={() => setAdminPage('data')}>
-            البيانات
+            Data
           </button>
           <button type="button" className={adminPage === 'photos' ? 'active' : ''} onClick={() => setAdminPage('photos')}>
-            الصور
+            Photos
             <span>{visiblePhotos.length}</span>
           </button>
         </section>
@@ -642,29 +642,29 @@ function App() {
       {isAdmin && (
         <section className="adminFilters">
           <label>
-            المنطقة
+            District
             <select value={adminFilters.district} onChange={(event) => setAdminFilters((prev) => ({ ...prev, district: event.target.value }))}>
-              <option value="">كل المناطق</option>
+              <option value="">All Districts</option>
               {adminOptions.districts.map((district) => <option key={district} value={district}>{district}</option>)}
             </select>
           </label>
           <label>
-            الفني
+            Technician
             <select value={adminFilters.techName} onChange={(event) => setAdminFilters((prev) => ({ ...prev, techName: event.target.value }))}>
-              <option value="">كل الفنيين</option>
+              <option value="">All Technicians</option>
               {adminOptions.techs.map((tech) => <option key={tech} value={tech}>{tech}</option>)}
             </select>
           </label>
           <label>
             النوع
             <select value={adminFilters.type} onChange={(event) => setAdminFilters((prev) => ({ ...prev, type: event.target.value }))}>
-              <option value="all">كل الأنواع</option>
+              <option value="all">All Types</option>
               {Object.entries(resources).map(([key, item]) => <option key={key} value={key}>{item.plural}</option>)}
             </select>
           </label>
           <label className="search">
             <Search size={17} />
-            <input placeholder="بحث في كل البيانات..." value={query} onChange={(event) => setQuery(event.target.value)} />
+            <input placeholder="Search all records..." value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
         </section>
       )}
@@ -693,7 +693,7 @@ function App() {
         <div className="mapShell">
           <button className="mapAddButton" type="button" onClick={() => setFormDrawerOpen(true)}>
             <Plus size={18} />
-            إضافة بيانات
+            Add
           </button>
           <MapContainer
             center={[form.latitude, form.longitude]}
@@ -721,14 +721,14 @@ function App() {
           <div className="mapControls">
             <button type="button" onClick={() => requestCurrentLocation(false)}>
               <LocateFixed size={17} />
-              موقعي الحالي
+              My Location
             </button>
             <span>{form.latitude}, {form.longitude}</span>
           </div>
         </div>
 
         <form className={`panel ${formDrawerOpen ? 'open' : ''}`} onSubmit={saveRecord}>
-          <div className="drawerTabs" aria-label="اختيار نوع الإضافة">
+          <div className="drawerTabs" aria-label="Choose record type">
             {Object.entries(resources).map(([key, item]) => (
               <button
                 key={key}
@@ -792,7 +792,7 @@ function App() {
           </label>
 
           <button className="save" type="submit" disabled={busy}>
-            {busy ? 'جار الحفظ...' : 'حفظ السجل'}
+            {busy ? 'Saving...' : 'Save Record'}
           </button>
         </form>
       </section>
@@ -800,7 +800,7 @@ function App() {
       {isAdmin && adminPage === 'photos' && (
         <section className="photosPage">
           <div className="recordsHeader">
-            <h2>الصور</h2>
+            <h2>Photos</h2>
             <span>{visiblePhotos.length} صورة</span>
           </div>
           <div className="photoGrid">
@@ -812,9 +812,9 @@ function App() {
                 <div>
                   <strong>{resources[row._type].singular}</strong>
                   <span>ID: {row.id}</span>
-                  <span>المنطقة: {row.district || '-'}</span>
-                  <span>الفني: {row.tech_name || '-'}</span>
-                  <span>التاريخ: {row.record_date}</span>
+                  <span>District: {row.district || '-'}</span>
+                  <span>Technician: {row.tech_name || '-'}</span>
+                  <span>Date: {row.record_date}</span>
                 </div>
               </article>
             ))}
@@ -826,7 +826,7 @@ function App() {
       {(!isAdmin || adminPage === 'data') && (
       <section className="records">
         <div className="recordsHeader">
-          <h2>{isAdmin ? 'كل السجلات' : 'سجلاتي'}</h2>
+          <h2>{isAdmin ? 'All Records' : 'My Records'}</h2>
           {!isAdmin && (
             <label className="search">
               <Search size={17} />
@@ -902,27 +902,27 @@ function LoginPage({ onSave }) {
           <UserRound size={30} />
         </div>
         <p className="eyebrow">Site Survey Pro</p>
-        <h1>{adminMode ? 'دخول الأدمن' : 'تسجيل دخول الفني'}</h1>
-        <p className="loginText">الفني يرى بيانات اسمه ومنطقته فقط. الأدمن يرى كل البيانات ويصدّر Excel.</p>
+        <h1>{adminMode ? 'Admin Login' : 'Technician Login'}</h1>
+        <p className="loginText">Technicians see only their district records. Admin can view all data and export Excel.</p>
 
         <label className="check adminSwitch">
           <input type="checkbox" checked={adminMode} onChange={(event) => setAdminMode(event.target.checked)} />
-          <span>تسجيل دخول كأدمن</span>
+          <span>Login as Admin</span>
         </label>
 
         <label>
-          اسم المستخدم
+            User Name
           <input autoFocus value={techName} onChange={(event) => setTechName(event.target.value)} placeholder="مثال: Ahmed Ali" />
         </label>
         {!adminMode && (
           <label>
-            المنطقة
+            District
             <input value={district} onChange={(event) => setDistrict(event.target.value)} placeholder="مثال: Hay Andalus Zone 2" />
           </label>
         )}
         {adminMode && (
           <label>
-            كود الأدمن
+            Admin PIN
             <input type="password" value={adminPin} onChange={(event) => setAdminPin(event.target.value)} placeholder="Admin PIN" />
           </label>
         )}
@@ -930,7 +930,7 @@ function LoginPage({ onSave }) {
         {error && <div className="notice">{error}</div>}
 
         <button className="save" type="submit" disabled={adminMode ? !adminPin.trim() : !techName.trim() || !district.trim()}>
-          دخول البرنامج
+          Enter App
         </button>
       </form>
     </main>
