@@ -287,6 +287,35 @@ button:disabled {
   z-index: 540;
 }
 
+.mapExpandButton {
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.18);
+  color: #0f172a;
+  min-height: 42px;
+  padding: 10px;
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  z-index: 545;
+}
+
+.expandedMap {
+  border-radius: 0;
+  bottom: 0;
+  height: 100vh;
+  left: 0;
+  min-height: 100vh;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 2000;
+}
+
+.expandedMap .map {
+  min-height: 100vh;
+}
+
 .map {
   height: 100%;
   min-height: 640px;
@@ -762,6 +791,10 @@ td {
     right: 16px;
     top: auto;
     width: 62px;
+  }
+
+  .mapExpandButton {
+    display: none;
   }
 
   .mapAddButton svg {

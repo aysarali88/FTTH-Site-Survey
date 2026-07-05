@@ -5,9 +5,11 @@ import {
   CheckCircle2,
   ClipboardList,
   Download,
+  Expand,
   LocateFixed,
   LogOut,
   MapPin,
+  Minimize2,
   Plus,
   RefreshCcw,
   Search,
@@ -310,6 +312,7 @@ function App() {
   const [message, setMessage] = useState('');
   const [photoFile, setPhotoFile] = useState(null);
   const [formDrawerOpen, setFormDrawerOpen] = useState(false);
+  const [mapExpanded, setMapExpanded] = useState(false);
   const [adminFilters, setAdminFilters] = useState({ district: '', techName: '', type: 'all' });
   const [adminPage, setAdminPage] = useState('data');
 
@@ -690,7 +693,16 @@ function App() {
       {message && <div className="notice">{message}</div>}
 
       <section className="workspace">
-        <div className="mapShell">
+        <div className={`mapShell ${mapExpanded ? 'expandedMap' : ''}`}>
+          <button
+            className="mapExpandButton"
+            type="button"
+            onClick={() => setMapExpanded((expanded) => !expanded)}
+            title={mapExpanded ? 'Exit full map' : 'Full map'}
+            aria-label={mapExpanded ? 'Exit full map' : 'Full map'}
+          >
+            {mapExpanded ? <Minimize2 size={19} /> : <Expand size={19} />}
+          </button>
           <button className="mapAddButton" type="button" onClick={() => setFormDrawerOpen(true)}>
             <Plus size={18} />
             Add
