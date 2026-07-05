@@ -31,7 +31,9 @@ const defaultLocation = { latitude: 32.8872, longitude: 13.1913 };
 const PROFILE_KEY = 'site-survey-profile';
 const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || '1234';
 const IMPORT_BATCH_SIZE = 500;
-const MAX_IMPORTED_RECORDS_TO_RENDER = 2000;
+const MAX_IMPORTED_RECORDS_TO_RENDER = 500;
+const MAX_MAP_MARKERS = 300;
+const MAX_TABLE_ROWS = 500;
 
 const resources = {
   buildings: {
@@ -517,10 +519,27 @@ function App() {
   }, [records, isAdmin, profile, adminFilters, query]);
 
   const currentRows = scopedRecords[active] || [];
+  const displayedRows = currentRows.slice(0, MAX_TABLE_ROWS);
+  const hiddenTableRows = Math.max(currentRows.length - displayedRows.length, 0);
   const allVisibleRows = useMemo(
     () => Object.entries(scopedRecords).flatMap(([type, rows]) => rows.map((row) => ({ ...row, _type: type }))),
     [scopedRecords],
   );
+  const mapRecords = useMemo(() => {
+    let remaining = MAX_MAP_MARKERS;
+    return Object.fromEntries(
+      Object.entries(scopedRecords).map(([type, rows]) => {
+        const limitedRows = rows.slice(0, Math.max(remaining, 0));
+        remaining -= limitedRows.length;
+        return [type, limitedRows];
+      }),
+    );
+  }, [scopedRecords]);
+  const mapMarkerCount = useMemo(
+    () => Object.values(mapRecords).reduce((sum, rows) => sum + rows.length, 0),
+    [mapRecords],
+  );
+  const hiddenMapMarkers = Math.max(allVisibleRows.length - mapMarkerCount, 0);
   const visiblePhotos = useMemo(
     () => allVisibleRows.filter((row) => row.photo_url),
     [allVisibleRows],
@@ -1057,8 +1076,13 @@ function App() {
             />
             <MapCenterSync value={form} onChange={setLocation} />
             <MapResizeSync expanded={mapExpanded} />
-            <SurveyMarkers groupedRecords={scopedRecords} onDelete={deleteRecord} canDelete />
+            <SurveyMarkers groupedRecords={mapRecords} onDelete={deleteRecord} canDelete />
           </MapContainer>
+          {hiddenMapMarkers > 0 && (
+            <div className="limitBadge">
+              Showing {mapMarkerCount} map points. Filter to show fewer records faster.
+            </div>
+          )}
           <div className="fixedPin" aria-hidden="true">
             <MapPin size={36} />
           </div>
@@ -1172,6 +1196,7 @@ function App() {
       <section className="records">
         <div className="recordsHeader">
           <h2>{isAdmin ? 'All Records' : 'My Records'}</h2>
+          {hiddenTableRows > 0 && <span className="softHint">Showing first {MAX_TABLE_ROWS} of {currentRows.length}. Use filters for more specific data.</span>}
           {!isAdmin && (
             <label className="search">
               <Search size={17} />
@@ -1191,7 +1216,7 @@ function App() {
               </tr>
             </thead>
             <tbody>
-              {currentRows.map((row) => (
+              {displayedRows.map((row) => (
                 <tr key={row.id}>
                   {current.columns.map((column) => <td key={column}>{formatValue(row[column])}</td>)}
                   <td>{row.latitude}</td>

@@ -247,6 +247,26 @@ button:disabled {
   padding: 12px 14px;
 }
 
+.limitBadge {
+  background: rgba(15, 23, 42, 0.88);
+  border-radius: 8px;
+  bottom: 88px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  inset-inline-start: 20px;
+  max-width: min(360px, calc(100% - 40px));
+  padding: 10px 12px;
+  position: absolute;
+  z-index: 520;
+}
+
+.softHint {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .adminFilters {
   background: #ffffff;
   border: 1px solid #e2e8f0;
