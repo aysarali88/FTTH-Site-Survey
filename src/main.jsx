@@ -503,6 +503,16 @@ function App() {
     return data.publicUrl;
   }
 
+  function mergeSavedRecord(type, savedRow) {
+    setRecords((previous) => {
+      const currentTypeRows = previous[type] || [];
+      return {
+        ...previous,
+        [type]: [savedRow, ...currentTypeRows.filter((row) => row.id !== savedRow.id)],
+      };
+    });
+  }
+
   async function saveRecord(event) {
     event.preventDefault();
     if (!hasSupabaseConfig) {
@@ -531,14 +541,24 @@ function App() {
       });
       if ('pole_length' in payload) payload.pole_length = payload.pole_length === '' ? null : Number(payload.pole_length);
 
-      const { error } = await supabase.from(current.table).upsert(payload, { onConflict: 'id' });
+      const { data, error } = await supabase.from(current.table).upsert(payload, { onConflict: 'id' }).select('*').single();
       if (error) throw error;
 
-      setForms((previous) => ({ ...previous, [active]: applyProfileToForm(current.empty, profile) }));
+      mergeSavedRecord(active, data || { ...payload, created_at: new Date().toISOString() });
+      setForms((previous) => ({
+        ...previous,
+        [active]: applyProfileToForm(
+          {
+            ...current.empty,
+            latitude: payload.latitude,
+            longitude: payload.longitude,
+          },
+          profile,
+        ),
+      }));
       setPhotoFile(null);
       setFormDrawerOpen(false);
       setMessage(`تم حفظ ${current.singular} بنجاح.`);
-      await loadAll();
     } catch (error) {
       setMessage(`تعذر الحفظ: ${error.message}`);
     } finally {
