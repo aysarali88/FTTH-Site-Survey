@@ -735,6 +735,7 @@ function App() {
             zoom={18}
             maxZoom={22}
             scrollWheelZoom
+            zoomControl={false}
             className="map"
             rotate
             touchRotate
