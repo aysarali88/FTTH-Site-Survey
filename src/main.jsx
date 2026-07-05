@@ -48,7 +48,6 @@ const resources = {
       district: '',
       tech_name: '',
       survey_date: today,
-      record_status: 'New',
       notes: '',
       photo_url: '',
     },
@@ -59,10 +58,9 @@ const resources = {
       ['building_status', 'Building status', 'select', ['جاهزه', 'غير جاهزه', 'بنايه متضرره']],
       ['district', 'district', 'text'],
       ['tech_name', 'tech name', 'text'],
-      ['record_status', 'Record Status', 'select', ['New', 'Submitted', 'Reviewed', 'Rejected']],
       ['notes', 'Notes', 'textarea'],
     ],
-    columns: ['id', 'building_type', 'floor_number', 'users_number', 'building_status', 'district', 'tech_name', 'record_status', 'record_date'],
+    columns: ['id', 'building_type', 'floor_number', 'users_number', 'building_status', 'district', 'tech_name', 'record_date', 'record_time'],
   },
   poles: {
     title: 'Poles',
@@ -81,7 +79,6 @@ const resources = {
       district: '',
       tech_name: '',
       survey_date: today,
-      record_status: 'New',
       notes: '',
       photo_url: '',
     },
@@ -92,10 +89,9 @@ const resources = {
       ['pole_status', 'Pole Status', 'select', ['جيد', 'غير جيد']],
       ['district', 'district', 'text'],
       ['tech_name', 'tech name', 'text'],
-      ['record_status', 'Record Status', 'select', ['New', 'Submitted', 'Reviewed', 'Rejected']],
       ['notes', 'Notes', 'textarea'],
     ],
-    columns: ['id', 'pole_owner', 'pole_type', 'pole_length', 'pole_status', 'district', 'tech_name', 'record_status', 'record_date'],
+    columns: ['id', 'pole_owner', 'pole_type', 'pole_length', 'pole_status', 'district', 'tech_name', 'record_date', 'record_time'],
   },
   column_checks: {
     title: 'New Pole Planting',
@@ -123,7 +119,7 @@ const resources = {
       ['is_existing', 'هل هو موجود', 'select', ['نعم', 'لا']],
       ['notes', 'ملاحظة', 'textarea'],
     ],
-    columns: ['id', 'district', 'tech_name', 'has_objection', 'is_existing', 'is_planted', 'notes', 'record_date'],
+    columns: ['id', 'district', 'tech_name', 'has_objection', 'is_existing', 'is_planted', 'notes', 'record_date', 'record_time'],
   },
 };
 
@@ -138,8 +134,8 @@ const labels = {
   district: 'district',
   tech_name: 'tech name',
   survey_date: 'date',
-  record_status: 'Record Status',
   record_date: 'Record date',
+  record_time: 'Record time',
   notes: 'Notes',
   photo_url: 'Photo URL',
   pole_owner: 'Pole owner',
@@ -231,6 +227,15 @@ function formatDate(value) {
   return `${dd}-${mm}-${yy}`;
 }
 
+function formatTime(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  const hh = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  return `${hh}:${min}`;
+}
+
 function makeRecordId(type) {
   const prefix = type === 'buildings' ? 'BLD' : type === 'poles' ? 'POL' : 'COL';
   const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
@@ -252,6 +257,7 @@ function normalizeRow(row, type) {
     ...row,
     survey_type: resources[type].plural,
     record_date: formatDate(row.created_at || row.survey_date),
+    record_time: formatTime(row.created_at),
   };
 }
 
@@ -306,7 +312,7 @@ function SurveyMarkers({ groupedRecords, onDelete, canDelete }) {
             <span>{row.id}</span>
             <span>{row.district || '-'}</span>
             <span>{row.tech_name || '-'}</span>
-            <span>{formatDate(row.created_at || row.survey_date)}</span>
+            <span>{formatDate(row.created_at || row.survey_date)} {formatTime(row.created_at)}</span>
             {row.photo_url && <a href={row.photo_url} target="_blank" rel="noreferrer">فتح الصورة</a>}
             {canDelete && (
               <button type="button" className="dangerMini" onClick={() => onDelete(type, row.id)}>
@@ -559,7 +565,7 @@ function App() {
         district: row.district || '',
         'tech name': row.tech_name || '',
         date: row.record_date,
-        'Record Status': row.record_status || '',
+        time: row.record_time,
         Notes: row.notes || '',
         'Photo URL': row.photo_url || '',
       })),
@@ -574,7 +580,7 @@ function App() {
         district: row.district || '',
         'tech name': row.tech_name || '',
         date: row.record_date,
-        'Record Status': row.record_status || '',
+        time: row.record_time,
         Notes: row.notes || '',
         'Photo URL': row.photo_url || '',
       })),
@@ -585,6 +591,7 @@ function App() {
         district: row.district || '',
         'tech name': row.tech_name || '',
         date: row.record_date,
+        time: row.record_time,
         'هل عليه اعتراض': booleanToYesNo(row.has_objection),
         'هل هو موجود': booleanToYesNo(row.is_existing),
         'هل تم زرعه': booleanToYesNo(row.is_planted),
@@ -786,7 +793,7 @@ function App() {
             <div>
               <p>سجل جديد</p>
               <h2>{current.title}</h2>
-              <span className="autoId">ID تلقائي، التاريخ {formatDate(new Date())}</span>
+              <span className="autoId">Auto ID, {formatDate(new Date())} {formatTime(new Date())}</span>
             </div>
             <div className="panelHeaderActions">
               <Camera color={current.accent} />
@@ -852,6 +859,7 @@ function App() {
                   <span>District: {row.district || '-'}</span>
                   <span>Technician: {row.tech_name || '-'}</span>
                   <span>Date: {row.record_date}</span>
+                  <span>Time: {row.record_time}</span>
                 </div>
               </article>
             ))}
