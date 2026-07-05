@@ -14,6 +14,7 @@ import {
   RefreshCcw,
   Search,
   Trash2,
+  Upload,
   UserRound,
   X,
 } from 'lucide-react';
@@ -298,6 +299,88 @@ function kmlStyleId(type) {
   return 'plantingStyle';
 }
 
+function readCell(row, keys) {
+  for (const key of keys) {
+    const value = row[key];
+    if (value !== undefined && value !== null && String(value).trim() !== '') return value;
+  }
+  return '';
+}
+
+function toNumberOrNull(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function excelYesNoToBoolean(value) {
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return ['yes', 'true', '1', 'نعم', 'ظ†ط¹ظ…'].includes(normalized);
+}
+
+function getWorksheetRows(workbook, sheetNames) {
+  const normalizedNames = new Map(workbook.SheetNames.map((name) => [name.trim().toLowerCase(), name]));
+  const sheetName = sheetNames.map((name) => normalizedNames.get(name.trim().toLowerCase())).find(Boolean);
+  if (!sheetName) return [];
+  return XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+}
+
+function buildRowsFromWorkbook(workbook) {
+  const buildingRows = getWorksheetRows(workbook, ['Buildings', 'Building', 'بنايات', 'اضافه بنايه']);
+  const poleRows = getWorksheetRows(workbook, ['Poles', 'Pole', 'اعمدة', 'اضافه عمود']);
+  const plantingRows = getWorksheetRows(workbook, ['New Pole Planting', 'Column Checks', 'زراعه عمود', 'زراعة عمود جديد']);
+
+  return {
+    buildings: buildingRows
+      .map((row) => ({
+        id: readCell(row, ['ID']) || makeRecordId('buildings'),
+        latitude: toNumberOrNull(readCell(row, ['Latitude', 'latitude'])),
+        longitude: toNumberOrNull(readCell(row, ['Longitude', 'longitude'])),
+        building_type: readCell(row, ['Building type', 'building_type']),
+        floor_number: toNumberOrNull(readCell(row, ['Floor number', 'floor_number'])),
+        users_number: toNumberOrNull(readCell(row, ['Users number', 'users_number'])),
+        building_status: readCell(row, ['Building status', 'building_status']),
+        district: readCell(row, ['district', 'District']),
+        tech_name: readCell(row, ['tech name', 'Technician', 'tech_name']),
+        survey_date: today,
+        notes: readCell(row, ['Notes', 'notes']),
+        photo_url: readCell(row, ['Photo URL', 'photo_url']),
+      }))
+      .filter((row) => Number.isFinite(row.latitude) && Number.isFinite(row.longitude)),
+    poles: poleRows
+      .map((row) => ({
+        id: readCell(row, ['ID']) || makeRecordId('poles'),
+        latitude: toNumberOrNull(readCell(row, ['Latitude', 'latitude'])),
+        longitude: toNumberOrNull(readCell(row, ['Longitude', 'longitude'])),
+        pole_owner: readCell(row, ['Pole owner', 'pole_owner']),
+        pole_type: readCell(row, ['Pole type', 'pole_type']),
+        pole_length: toNumberOrNull(readCell(row, ['Pole length', 'pole_length'])),
+        pole_status: readCell(row, ['Pole Status', 'pole_status']),
+        district: readCell(row, ['district', 'District']),
+        tech_name: readCell(row, ['tech name', 'Technician', 'tech_name']),
+        survey_date: today,
+        notes: readCell(row, ['Notes', 'notes']),
+        photo_url: readCell(row, ['Photo URL', 'photo_url']),
+      }))
+      .filter((row) => Number.isFinite(row.latitude) && Number.isFinite(row.longitude)),
+    column_checks: plantingRows
+      .map((row) => ({
+        id: readCell(row, ['ID']) || makeRecordId('column_checks'),
+        latitude: toNumberOrNull(readCell(row, ['Latitude', 'latitude'])),
+        longitude: toNumberOrNull(readCell(row, ['Longitude', 'longitude'])),
+        district: readCell(row, ['district', 'District']),
+        tech_name: readCell(row, ['tech name', 'Technician', 'tech_name']),
+        has_objection: excelYesNoToBoolean(readCell(row, [labels.has_objection, 'has_objection', 'Has objection'])),
+        is_existing: excelYesNoToBoolean(readCell(row, [labels.is_existing, 'is_existing', 'Is existing'])),
+        is_planted: excelYesNoToBoolean(readCell(row, [labels.is_planted, 'is_planted', 'Is planted'])),
+        notes: readCell(row, ['Notes', 'notes', labels.notes]),
+        photo_url: readCell(row, ['Photo URL', 'photo_url']),
+      }))
+      .filter((row) => Number.isFinite(row.latitude) && Number.isFinite(row.longitude)),
+  };
+}
+
 function MapCenterSync({ value, onChange }) {
   const map = useMap();
 
@@ -511,6 +594,52 @@ function App() {
         [type]: [savedRow, ...currentTypeRows.filter((row) => row.id !== savedRow.id)],
       };
     });
+  }
+
+  function mergeSavedRecords(nextRecords) {
+    setRecords((previous) => {
+      const merged = { ...previous };
+      for (const [type, rows] of Object.entries(nextRecords)) {
+        if (!rows.length) continue;
+        const savedIds = new Set(rows.map((row) => row.id));
+        merged[type] = [...rows, ...(previous[type] || []).filter((row) => !savedIds.has(row.id))];
+      }
+      return merged;
+    });
+  }
+
+  async function importExcel(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!isAdmin) return;
+    if (!hasSupabaseConfig) {
+      setMessage('لا يمكن الرفع قبل إضافة إعدادات Supabase.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const parsedRows = buildRowsFromWorkbook(workbook);
+      const totalRows = Object.values(parsedRows).reduce((sum, rows) => sum + rows.length, 0);
+      if (!totalRows) throw new Error('لم يتم العثور على نقاط صالحة. تأكد من وجود Latitude و Longitude واسم الشيت الصحيح.');
+
+      const savedRows = { buildings: [], poles: [], column_checks: [] };
+      for (const [type, rows] of Object.entries(parsedRows)) {
+        if (!rows.length) continue;
+        const { data, error } = await supabase.from(resources[type].table).upsert(rows, { onConflict: 'id' }).select('*');
+        if (error) throw error;
+        savedRows[type] = data || rows;
+      }
+
+      mergeSavedRecords(savedRows);
+      setMessage(`تم رفع ${totalRows} نقطة من ملف Excel بنجاح.`);
+    } catch (error) {
+      setMessage(`تعذر رفع ملف Excel: ${error.message}`);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function saveRecord(event) {
@@ -760,6 +889,11 @@ function App() {
                 <Download size={18} />
                 KML
               </button>
+              <label className={`ghost fileButton ${busy ? 'disabled' : ''}`}>
+                <Upload size={18} />
+                Import Excel
+                <input type="file" accept=".xlsx,.xls" onChange={importExcel} disabled={busy} />
+              </label>
             </>
           )}
         </div>

@@ -170,6 +170,27 @@ button:disabled {
   color: #1e293b;
 }
 
+.fileButton {
+  align-items: center;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 8px;
+  justify-content: center;
+  min-height: 42px;
+  padding: 10px 14px;
+}
+
+.fileButton input {
+  display: none;
+}
+
+.fileButton.disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .stats {
   display: grid;
   gap: 12px;
