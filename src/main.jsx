@@ -30,6 +30,8 @@ const today = new Date().toISOString().slice(0, 10);
 const defaultLocation = { latitude: 32.8872, longitude: 13.1913 };
 const PROFILE_KEY = 'site-survey-profile';
 const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || '1234';
+const IMPORT_BATCH_SIZE = 500;
+const MAX_IMPORTED_RECORDS_TO_RENDER = 2000;
 
 const resources = {
   buildings: {
@@ -240,7 +242,9 @@ function formatTime(value) {
 function makeRecordId(type) {
   const prefix = type === 'buildings' ? 'BLD' : type === 'poles' ? 'POL' : 'COL';
   const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
-  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  const suffix = crypto.randomUUID
+    ? crypto.randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()
+    : `${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`.toUpperCase();
   return `${prefix}-${stamp}-${suffix}`;
 }
 
@@ -324,6 +328,37 @@ function getWorksheetRows(workbook, sheetNames) {
   const sheetName = sheetNames.map((name) => normalizedNames.get(name.trim().toLowerCase())).find(Boolean);
   if (!sheetName) return [];
   return XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+}
+
+function dedupeRowsById(rows) {
+  const byId = new Map();
+  let duplicates = 0;
+  for (const row of rows) {
+    const id = String(row.id || '').trim();
+    if (!id) continue;
+    if (byId.has(id)) duplicates += 1;
+    byId.set(id, { ...row, id });
+  }
+  return { rows: [...byId.values()], duplicates };
+}
+
+function chunkRows(rows, size) {
+  const chunks = [];
+  for (let index = 0; index < rows.length; index += size) {
+    chunks.push(rows.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function finalizeImportRows(parsedRows) {
+  let duplicateCount = 0;
+  const deduped = {};
+  for (const [type, rows] of Object.entries(parsedRows)) {
+    const result = dedupeRowsById(rows);
+    deduped[type] = result.rows;
+    duplicateCount += result.duplicates;
+  }
+  return { rows: deduped, duplicateCount };
 }
 
 function buildRowsFromWorkbook(workbook) {
@@ -621,19 +656,27 @@ function App() {
     setBusy(true);
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
-      const parsedRows = buildRowsFromWorkbook(workbook);
+      const importData = finalizeImportRows(buildRowsFromWorkbook(workbook));
+      const parsedRows = importData.rows;
       const totalRows = Object.values(parsedRows).reduce((sum, rows) => sum + rows.length, 0);
       if (!totalRows) throw new Error('لم يتم العثور على نقاط صالحة. تأكد من وجود Latitude و Longitude واسم الشيت الصحيح.');
 
-      const savedRows = { buildings: [], poles: [], column_checks: [] };
+      let visibleBudget = MAX_IMPORTED_RECORDS_TO_RENDER;
+      const visibleRows = { buildings: [], poles: [], column_checks: [] };
       for (const [type, rows] of Object.entries(parsedRows)) {
         if (!rows.length) continue;
-        const { data, error } = await supabase.from(resources[type].table).upsert(rows, { onConflict: 'id' }).select('*');
-        if (error) throw error;
-        savedRows[type] = data || rows;
+        for (const chunk of chunkRows(rows, IMPORT_BATCH_SIZE)) {
+          const { error } = await supabase.from(resources[type].table).upsert(chunk, { onConflict: 'id' });
+          if (error) throw error;
+        }
+        if (visibleBudget > 0) {
+          const previewRows = rows.slice(0, visibleBudget).map((row) => ({ ...row, created_at: new Date().toISOString() }));
+          visibleRows[type] = previewRows;
+          visibleBudget -= previewRows.length;
+        }
       }
 
-      mergeSavedRecords(savedRows);
+      mergeSavedRecords(visibleRows);
       setMessage(`تم رفع ${totalRows} نقطة من ملف Excel بنجاح.`);
     } catch (error) {
       setMessage(`تعذر رفع ملف Excel: ${error.message}`);
