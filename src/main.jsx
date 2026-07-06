@@ -18,7 +18,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { CircleMarker, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import * as XLSX from 'xlsx';
 import 'leaflet/dist/leaflet.css';
@@ -32,8 +32,9 @@ const PROFILE_KEY = 'site-survey-profile';
 const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || '1234';
 const IMPORT_BATCH_SIZE = 500;
 const MAX_IMPORTED_RECORDS_TO_RENDER = 500;
-const MAX_MAP_MARKERS = 300;
+const MAX_MAP_MARKERS = 120;
 const MAX_TABLE_ROWS = 500;
+const FAST_ICON_MARKER_LIMIT = 80;
 
 const resources = {
   buildings: {
@@ -196,6 +197,13 @@ const markerIcons = {
     iconAnchor: [14, 28],
     popupAnchor: [0, -24],
   }),
+};
+
+const canvasRenderer = L.canvas({ padding: 0.5 });
+const markerColors = {
+  buildings: '#dc2626',
+  poles: '#0f172a',
+  column_checks: '#7c3aed',
 };
 
 function readSavedProfile() {
@@ -479,6 +487,57 @@ function SurveyMarkers({ groupedRecords, onDelete, canDelete }) {
           </div>
         </Popup>
       </Marker>
+    )),
+  );
+}
+
+function FastSurveyMarkers({ groupedRecords, onDelete, canDelete }) {
+  const totalMarkers = Object.values(groupedRecords).reduce((sum, rows) => sum + rows.length, 0);
+  const useFastMarkers = totalMarkers > FAST_ICON_MARKER_LIMIT;
+
+  function renderPopup(type, row) {
+    return (
+      <Popup>
+        <div className="markerPopup">
+          <strong>{resources[type].singular}</strong>
+          <span>{row.id}</span>
+          <span>{row.district || '-'}</span>
+          <span>{row.tech_name || '-'}</span>
+          <span>{formatDate(row.created_at || row.survey_date)} {formatTime(row.created_at)}</span>
+          {row.photo_url && <a href={row.photo_url} target="_blank" rel="noreferrer">Open photo</a>}
+          {canDelete && (
+            <button type="button" className="dangerMini" onClick={() => onDelete(type, row.id)}>
+              Delete point
+            </button>
+          )}
+        </div>
+      </Popup>
+    );
+  }
+
+  return Object.entries(groupedRecords).flatMap(([type, rows]) =>
+    rows.map((row) => (
+      useFastMarkers ? (
+        <CircleMarker
+          key={`${type}-${row.id}`}
+          center={[row.latitude, row.longitude]}
+          radius={7}
+          renderer={canvasRenderer}
+          pathOptions={{
+            color: '#ffffff',
+            fillColor: markerColors[type],
+            fillOpacity: 0.88,
+            opacity: 0.9,
+            weight: 2,
+          }}
+        >
+          {renderPopup(type, row)}
+        </CircleMarker>
+      ) : (
+        <Marker key={`${type}-${row.id}`} position={[row.latitude, row.longitude]} icon={markerIcons[type]}>
+          {renderPopup(type, row)}
+        </Marker>
+      )
     )),
   );
 }
@@ -1076,7 +1135,7 @@ function App() {
             />
             <MapCenterSync value={form} onChange={setLocation} />
             <MapResizeSync expanded={mapExpanded} />
-            <SurveyMarkers groupedRecords={mapRecords} onDelete={deleteRecord} canDelete />
+            <FastSurveyMarkers groupedRecords={mapRecords} onDelete={deleteRecord} canDelete />
           </MapContainer>
           {hiddenMapMarkers > 0 && (
             <div className="limitBadge">
