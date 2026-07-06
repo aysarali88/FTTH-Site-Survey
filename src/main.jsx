@@ -18,7 +18,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { CircleMarker, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { CircleMarker, MapContainer, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import * as XLSX from 'xlsx';
 import 'leaflet/dist/leaflet.css';
@@ -32,9 +32,8 @@ const PROFILE_KEY = 'site-survey-profile';
 const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || '1234';
 const IMPORT_BATCH_SIZE = 500;
 const MAX_IMPORTED_RECORDS_TO_RENDER = 500;
-const MAX_MAP_MARKERS = 120;
+const MAX_MAP_MARKERS = 250;
 const MAX_TABLE_ROWS = 500;
-const FAST_ICON_MARKER_LIMIT = 80;
 
 const resources = {
   buildings: {
@@ -201,9 +200,9 @@ const markerIcons = {
 
 const canvasRenderer = L.canvas({ padding: 0.5 });
 const markerColors = {
-  buildings: '#dc2626',
-  poles: '#0f172a',
-  column_checks: '#7c3aed',
+  buildings: '#ef4444',
+  poles: '#2563eb',
+  column_checks: '#2563eb',
 };
 
 function readSavedProfile() {
@@ -492,9 +491,6 @@ function SurveyMarkers({ groupedRecords, onDelete, canDelete }) {
 }
 
 function FastSurveyMarkers({ groupedRecords, onDelete, canDelete }) {
-  const totalMarkers = Object.values(groupedRecords).reduce((sum, rows) => sum + rows.length, 0);
-  const useFastMarkers = totalMarkers > FAST_ICON_MARKER_LIMIT;
-
   function renderPopup(type, row) {
     return (
       <Popup>
@@ -517,27 +513,21 @@ function FastSurveyMarkers({ groupedRecords, onDelete, canDelete }) {
 
   return Object.entries(groupedRecords).flatMap(([type, rows]) =>
     rows.map((row) => (
-      useFastMarkers ? (
-        <CircleMarker
-          key={`${type}-${row.id}`}
-          center={[row.latitude, row.longitude]}
-          radius={7}
-          renderer={canvasRenderer}
-          pathOptions={{
-            color: '#ffffff',
-            fillColor: markerColors[type],
-            fillOpacity: 0.88,
-            opacity: 0.9,
-            weight: 2,
-          }}
-        >
-          {renderPopup(type, row)}
-        </CircleMarker>
-      ) : (
-        <Marker key={`${type}-${row.id}`} position={[row.latitude, row.longitude]} icon={markerIcons[type]}>
-          {renderPopup(type, row)}
-        </Marker>
-      )
+      <CircleMarker
+        key={`${type}-${row.id}`}
+        center={[row.latitude, row.longitude]}
+        radius={type === 'buildings' ? 7 : 6}
+        renderer={canvasRenderer}
+        pathOptions={{
+          color: '#ffffff',
+          fillColor: markerColors[type],
+          fillOpacity: 0.9,
+          opacity: 0.95,
+          weight: 2,
+        }}
+      >
+        {renderPopup(type, row)}
+      </CircleMarker>
     )),
   );
 }
