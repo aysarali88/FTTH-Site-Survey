@@ -772,6 +772,8 @@ function App() {
         photo_url: photoUrl,
       };
 
+      if (active === 'column_checks') delete payload.survey_date;
+
       ['has_objection', 'is_existing', 'is_planted'].forEach((key) => {
         if (key in payload) payload[key] = yesNoToBoolean(payload[key]);
       });
