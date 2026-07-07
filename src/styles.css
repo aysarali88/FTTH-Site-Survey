@@ -882,11 +882,24 @@ td {
 
   .logoutButton {
     display: inline-flex;
+    border-radius: 999px;
+    bottom: 64px;
+    font-size: 0;
+    height: 62px;
+    padding: 0;
+    right: 16px;
+    top: auto;
+    width: 62px;
   }
 
   .mapAddButton svg {
     height: 30px;
     width: 30px;
+  }
+
+  .logoutButton svg {
+    height: 24px;
+    width: 24px;
   }
 
   .coordinateGrid,
