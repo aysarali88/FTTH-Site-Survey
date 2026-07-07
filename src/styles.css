@@ -332,6 +332,18 @@ button:disabled {
   z-index: 540;
 }
 
+.logoutButton {
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.18);
+  color: #0f172a;
+  display: none;
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  z-index: 540;
+}
+
 .mapExpandButton {
   background: #ffffff;
   border: 1px solid #dbe4ef;
@@ -868,6 +880,10 @@ td {
     display: none;
   }
 
+  .logoutButton {
+    display: inline-flex;
+  }
+
   .mapAddButton svg {
     height: 30px;
     width: 30px;
@@ -976,8 +992,7 @@ td {
   }
 
   .adminMode .topbar {
-    display: flex;
-    margin: 10px;
+    display: none;
   }
 
   .adminMode .adminFilters {
@@ -1007,13 +1022,13 @@ td {
   }
 
   .adminMode .mapShell {
-    bottom: auto;
-    left: auto;
-    position: relative;
-    right: auto;
-    top: auto;
-    width: 100%;
-    z-index: auto;
+    bottom: 0;
+    left: 0;
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: 100vw;
+    z-index: 1;
   }
 
   th,

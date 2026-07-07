@@ -229,6 +229,18 @@ function makeEmptyForms(profile) {
   );
 }
 
+function getResourceUiLabel(key) {
+  if (key === 'buildings') return 'البنايات';
+  if (key === 'poles') return 'الأعمدة';
+  return 'زراعة الأعمدة';
+}
+
+function getResourceUiSingular(key) {
+  if (key === 'buildings') return 'بناية';
+  if (key === 'poles') return 'عمود';
+  return 'زراعة عمود';
+}
+
 function formatDate(value) {
   if (!value) return '-';
   const date = new Date(value);
@@ -472,7 +484,7 @@ function SurveyMarkers({ groupedRecords, onDelete, canDelete }) {
       <Marker key={`${type}-${row.id}`} position={[row.latitude, row.longitude]} icon={markerIcons[type]}>
         <Popup>
           <div className="markerPopup">
-            <strong>{resources[type].singular}</strong>
+            <strong>{getResourceUiSingular(type)}</strong>
             <span>{row.id}</span>
             <span>{row.district || '-'}</span>
             <span>{row.tech_name || '-'}</span>
@@ -495,7 +507,7 @@ function FastSurveyMarkers({ groupedRecords, onDelete, canDelete }) {
     return (
       <Popup>
         <div className="markerPopup">
-          <strong>{resources[type].singular}</strong>
+          <strong>{getResourceUiSingular(type)}</strong>
           <span>{row.id}</span>
           <span>{row.district || '-'}</span>
           <span>{row.tech_name || '-'}</span>
@@ -976,7 +988,7 @@ function App() {
       <header className="topbar">
         <div>
           <p className="eyebrow">Site Survey Pro</p>
-          <h1>{isAdmin ? 'Admin Dashboard' : 'Site Survey Map'}</h1>
+          <h1>{isAdmin ? 'لوحة الإدارة' : 'خريطة الرفع الميداني'}</h1>
         </div>
         <div className="actions">
           <div className="profilePill" title="بيانات المستخدم الحالية">
@@ -984,19 +996,19 @@ function App() {
             <span>{profile.techName}</span>
             <strong>{isAdmin ? 'Admin' : profile.district}</strong>
           </div>
-          <button className="ghost" type="button" onClick={changeProfile}>
+          <button className="ghost" type="button" onClick={changeProfile} aria-label="تسجيل الخروج">
             <LogOut size={18} />
-            Change User
+            تسجيل الخروج
           </button>
           <button className="ghost" type="button" onClick={loadAll} disabled={busy}>
             <RefreshCcw size={18} />
-            Refresh
+            تحديث
           </button>
           {isAdmin && (
             <>
               <button className="ghost" type="button" onClick={exportExcel}>
                 <Download size={18} />
-                Excel
+                إكسل
               </button>
               <button className="ghost" type="button" onClick={exportKml}>
                 <Download size={18} />
@@ -1004,7 +1016,7 @@ function App() {
               </button>
               <label className={`ghost fileButton ${busy ? 'disabled' : ''}`}>
                 <Upload size={18} />
-                Import Excel
+                رفع إكسل
                 <input type="file" accept=".xlsx,.xls" onChange={importExcel} disabled={busy} />
               </label>
             </>
@@ -1033,10 +1045,10 @@ function App() {
       {isAdmin && (
         <section className="adminPages" aria-label="Admin pages">
           <button type="button" className={adminPage === 'data' ? 'active' : ''} onClick={() => setAdminPage('data')}>
-            Data
+            البيانات
           </button>
           <button type="button" className={adminPage === 'photos' ? 'active' : ''} onClick={() => setAdminPage('photos')}>
-            Photos
+            الصور
             <span>{visiblePhotos.length}</span>
           </button>
         </section>
@@ -1045,16 +1057,16 @@ function App() {
       {isAdmin && (
         <section className="adminFilters">
           <label>
-            District
+            المنطقة
             <select value={adminFilters.district} onChange={(event) => setAdminFilters((prev) => ({ ...prev, district: event.target.value }))}>
-              <option value="">All Districts</option>
+              <option value="">كل المناطق</option>
               {adminOptions.districts.map((district) => <option key={district} value={district}>{district}</option>)}
             </select>
           </label>
           <label>
-            Technician
+            الفني
             <select value={adminFilters.techName} onChange={(event) => setAdminFilters((prev) => ({ ...prev, techName: event.target.value }))}>
-              <option value="">All Technicians</option>
+              <option value="">كل الفنيين</option>
               {adminOptions.techs.map((tech) => <option key={tech} value={tech}>{tech}</option>)}
             </select>
           </label>
@@ -1062,12 +1074,12 @@ function App() {
             النوع
             <select value={adminFilters.type} onChange={(event) => setAdminFilters((prev) => ({ ...prev, type: event.target.value }))}>
               <option value="all">كل الأنواع</option>
-              {Object.entries(resources).map(([key, item]) => <option key={key} value={key}>{item.plural}</option>)}
+              {Object.entries(resources).map(([key]) => <option key={key} value={key}>{getResourceUiLabel(key)}</option>)}
             </select>
           </label>
           <label className="search">
             <Search size={17} />
-            <input placeholder="Search all records..." value={query} onChange={(event) => setQuery(event.target.value)} />
+            <input placeholder="بحث..." value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
         </section>
       )}
@@ -1085,7 +1097,7 @@ function App() {
               setFormDrawerOpen(true);
             }}
           >
-            {item.title}
+            {getResourceUiLabel(key)}
           </button>
         ))}
       </nav>
@@ -1098,14 +1110,18 @@ function App() {
             className="mapExpandButton"
             type="button"
             onClick={() => setMapExpanded((expanded) => !expanded)}
-            title={mapExpanded ? 'Exit full map' : 'Full map'}
-            aria-label={mapExpanded ? 'Exit full map' : 'Full map'}
+            title={mapExpanded ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}
+            aria-label={mapExpanded ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}
           >
             {mapExpanded ? <Minimize2 size={19} /> : <Expand size={19} />}
           </button>
           <button className="mapAddButton" type="button" onClick={() => setFormDrawerOpen(true)}>
             <Plus size={18} />
-            Add
+            إضافة
+          </button>
+          <button className="logoutButton" type="button" onClick={changeProfile} aria-label="تسجيل الخروج">
+            <LogOut size={18} />
+            خروج
           </button>
           <MapContainer
             center={[form.latitude, form.longitude]}
@@ -1131,7 +1147,7 @@ function App() {
           </MapContainer>
           {hiddenMapMarkers > 0 && (
             <div className="limitBadge">
-              Showing {mapMarkerCount} map points. Filter to show fewer records faster.
+              تظهر {mapMarkerCount} نقطة فقط لتسريع العرض.
             </div>
           )}
           <div className="fixedPin" aria-hidden="true">
@@ -1140,7 +1156,7 @@ function App() {
           <div className="mapControls">
             <button type="button" onClick={() => requestCurrentLocation(false)}>
               <LocateFixed size={17} />
-              My Location
+              موقعي
             </button>
             <span>{form.latitude}, {form.longitude}</span>
           </div>
@@ -1159,7 +1175,7 @@ function App() {
                   setPhotoFile(null);
                 }}
               >
-                {item.title}
+                {getResourceUiLabel(key)}
               </button>
             ))}
           </div>
@@ -1167,8 +1183,8 @@ function App() {
           <div className="panelHeader">
             <div>
               <p>سجل جديد</p>
-              <h2>{current.title}</h2>
-              <span className="autoId">Auto ID, {formatDate(new Date())} {formatTime(new Date())}</span>
+              <h2>{getResourceUiLabel(active)}</h2>
+              <span className="autoId">ID تلقائي, {formatDate(new Date())} {formatTime(new Date())}</span>
             </div>
             <div className="panelHeaderActions">
               <Camera color={current.accent} />
@@ -1211,7 +1227,7 @@ function App() {
           </label>
 
           <button className="save" type="submit" disabled={busy}>
-            {busy ? 'Saving...' : 'Save Record'}
+            {busy ? 'جارٍ الحفظ...' : 'حفظ السجل'}
           </button>
         </form>
       </section>
@@ -1219,22 +1235,22 @@ function App() {
       {isAdmin && adminPage === 'photos' && (
         <section className="photosPage">
           <div className="recordsHeader">
-            <h2>Photos</h2>
+            <h2>الصور</h2>
             <span>{visiblePhotos.length} صورة</span>
           </div>
           <div className="photoGrid">
             {visiblePhotos.map((row) => (
               <article className="photoCard" key={`${row._type}-${row.id}`}>
                 <a href={row.photo_url} target="_blank" rel="noreferrer">
-                  <img src={row.photo_url} alt={`${resources[row._type].singular} ${row.id}`} loading="lazy" />
+                  <img src={row.photo_url} alt={`${getResourceUiSingular(row._type)} ${row.id}`} loading="lazy" />
                 </a>
                 <div>
-                  <strong>{resources[row._type].singular}</strong>
+                  <strong>{getResourceUiSingular(row._type)}</strong>
                   <span>ID: {row.id}</span>
-                  <span>District: {row.district || '-'}</span>
-                  <span>Technician: {row.tech_name || '-'}</span>
-                  <span>Date: {row.record_date}</span>
-                  <span>Time: {row.record_time}</span>
+                  <span>المنطقة: {row.district || '-'}</span>
+                  <span>الفني: {row.tech_name || '-'}</span>
+                  <span>التاريخ: {row.record_date}</span>
+                  <span>الوقت: {row.record_time}</span>
                 </div>
               </article>
             ))}
@@ -1246,8 +1262,8 @@ function App() {
       {(!isAdmin || adminPage === 'data') && (
       <section className="records">
         <div className="recordsHeader">
-          <h2>{isAdmin ? 'All Records' : 'My Records'}</h2>
-          {hiddenTableRows > 0 && <span className="softHint">Showing first {MAX_TABLE_ROWS} of {currentRows.length}. Use filters for more specific data.</span>}
+          <h2>{isAdmin ? 'كل السجلات' : 'سجلاتي'}</h2>
+          {hiddenTableRows > 0 && <span className="softHint">يظهر أول {MAX_TABLE_ROWS} من {currentRows.length} فقط. استخدم الفلاتر لعرض أدق.</span>}
           {!isAdmin && (
             <label className="search">
               <Search size={17} />
@@ -1323,35 +1339,35 @@ function LoginPage({ onSave }) {
           <UserRound size={30} />
         </div>
         <p className="eyebrow">Site Survey Pro</p>
-        <h1>{adminMode ? 'Admin Login' : 'Technician Login'}</h1>
-        <p className="loginText">Technicians see only their district records. Admin can view all data and export Excel.</p>
+        <h1>{adminMode ? 'دخول الأدمن' : 'دخول الفني'}</h1>
+        <p className="loginText">الفني يرى سجلات منطقته فقط. الأدمن يرى كل البيانات ويصدر الإكسل.</p>
 
         <label className="check adminSwitch">
           <input type="checkbox" checked={adminMode} onChange={(event) => setAdminMode(event.target.checked)} />
-          <span>Login as Admin</span>
+          <span>تسجيل دخول كأدمن</span>
         </label>
 
         <label>
-            User Name
-          <input autoFocus value={techName} onChange={(event) => setTechName(event.target.value)} placeholder="مثال: Ahmed Ali" />
+            اسم المستخدم
+          <input autoFocus value={techName} onChange={(event) => setTechName(event.target.value)} placeholder="مثال: أحمد علي" />
         </label>
         {!adminMode && (
           <label>
-            District
-            <input value={district} onChange={(event) => setDistrict(event.target.value)} placeholder="مثال: Hay Andalus Zone 2" />
+            المنطقة
+            <input value={district} onChange={(event) => setDistrict(event.target.value)} placeholder="مثال: حي الأندلس - المنطقة 2" />
           </label>
         )}
         {adminMode && (
           <label>
-            Admin PIN
-            <input type="password" value={adminPin} onChange={(event) => setAdminPin(event.target.value)} placeholder="Admin PIN" />
+            رمز الأدمن
+            <input type="password" value={adminPin} onChange={(event) => setAdminPin(event.target.value)} placeholder="رمز الأدمن" />
           </label>
         )}
 
         {error && <div className="notice">{error}</div>}
 
         <button className="save" type="submit" disabled={adminMode ? !adminPin.trim() : !techName.trim() || !district.trim()}>
-          Enter App
+          دخول التطبيق
         </button>
       </form>
     </main>
