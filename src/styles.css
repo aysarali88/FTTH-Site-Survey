@@ -827,15 +827,28 @@ td {
 
   .workspace {
     display: block;
-    height: 100%;
-  }
-
-  .mapShell,
-  .map {
-    border-radius: 0;
-    border: 0;
     height: 100dvh;
     min-height: 100dvh;
+  }
+
+  .mapShell {
+    border-radius: 0;
+    border: 0;
+    bottom: 0;
+    height: 100dvh;
+    left: 0;
+    min-height: 100dvh;
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: 100vw;
+    z-index: 1;
+  }
+
+  .map {
+    height: 100dvh;
+    min-height: 100dvh;
+    width: 100vw;
   }
 
   .mapAddButton {
@@ -989,8 +1002,18 @@ td {
 
   .adminMode .mapShell,
   .adminMode .map {
-    height: 70dvh;
-    min-height: 70dvh;
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  .adminMode .mapShell {
+    bottom: auto;
+    left: auto;
+    position: relative;
+    right: auto;
+    top: auto;
+    width: 100%;
+    z-index: auto;
   }
 
   th,

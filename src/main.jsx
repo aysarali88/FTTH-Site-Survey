@@ -37,9 +37,9 @@ const MAX_TABLE_ROWS = 500;
 
 const resources = {
   buildings: {
-    title: 'Buildings',
+    title: 'الأبنية',
     singular: 'بناية',
-    plural: 'Buildings',
+    plural: 'الأبنية',
     table: 'buildings',
     accent: '#dc2626',
     empty: {
@@ -68,9 +68,9 @@ const resources = {
     columns: ['id', 'building_type', 'floor_number', 'users_number', 'building_status', 'district', 'tech_name', 'record_date', 'record_time'],
   },
   poles: {
-    title: 'Poles',
+    title: 'الأعمدة',
     singular: 'عمود',
-    plural: 'Poles',
+    plural: 'الأعمدة',
     table: 'poles',
     accent: '#059669',
     empty: {
@@ -99,9 +99,9 @@ const resources = {
     columns: ['id', 'pole_owner', 'pole_type', 'pole_length', 'pole_status', 'district', 'tech_name', 'record_date', 'record_time'],
   },
   column_checks: {
-    title: 'New Pole Planting',
-    singular: 'New Pole Planting',
-    plural: 'New Pole Planting',
+    title: 'زراعة الأعمدة',
+    singular: 'زراعة عمود',
+    plural: 'زراعة الأعمدة',
     table: 'column_checks',
     accent: '#7c3aed',
     empty: {
@@ -301,9 +301,9 @@ function downloadTextFile(content, fileName, type) {
 }
 
 function kmlTypeLabel(type) {
-  if (type === 'buildings') return 'Building';
-  if (type === 'poles') return 'Pole';
-  return 'New Pole Planting';
+  if (type === 'buildings') return 'بناية';
+  if (type === 'poles') return 'عمود';
+  return 'زراعة عمود';
 }
 
 function kmlStyleId(type) {
@@ -1015,17 +1015,17 @@ function App() {
       <section className="stats">
         <article>
           <ClipboardList size={19} />
-          <span>Buildings</span>
+          <span>الأبنية</span>
           <strong>{totals.buildings}</strong>
         </article>
         <article>
           <MapPin size={19} />
-          <span>Poles</span>
+          <span>الأعمدة</span>
           <strong>{totals.poles}</strong>
         </article>
         <article>
           <CheckCircle2 size={19} />
-          <span>New Pole Planting</span>
+          <span>زراعة الأعمدة</span>
           <strong>{totals.column_checks}</strong>
         </article>
       </section>
@@ -1061,7 +1061,7 @@ function App() {
           <label>
             النوع
             <select value={adminFilters.type} onChange={(event) => setAdminFilters((prev) => ({ ...prev, type: event.target.value }))}>
-              <option value="all">All Types</option>
+              <option value="all">كل الأنواع</option>
               {Object.entries(resources).map(([key, item]) => <option key={key} value={key}>{item.plural}</option>)}
             </select>
           </label>
