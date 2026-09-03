@@ -994,7 +994,7 @@ function App() {
       <header className="topbar">
         <div>
           <p className="eyebrow">Site Survey Pro</p>
-          <h1>{isAdmin ? 'لوحة الإدارة' : 'خريطة الرفع الميداني'}</h1>
+          <h1>{isAdmin ? 'Admin Dashboard' : 'خريطة الرفع الميداني'}</h1>
         </div>
         <div className="actions">
           <div className="profilePill" title="بيانات المستخدم الحالية">
@@ -1002,19 +1002,19 @@ function App() {
             <span>{profile.techName}</span>
             <strong>{isAdmin ? 'Admin' : profile.district}</strong>
           </div>
-          <button className="ghost" type="button" onClick={changeProfile} aria-label="تسجيل الخروج">
+          <button className="ghost" type="button" onClick={changeProfile} aria-label="Logout">
             <LogOut size={18} />
-            تسجيل الخروج
+            Logout
           </button>
           <button className="ghost" type="button" onClick={loadAll} disabled={busy}>
             <RefreshCcw size={18} />
-            تحديث
+            Refresh
           </button>
           {isAdmin && (
             <>
               <button className="ghost" type="button" onClick={exportExcel}>
                 <Download size={18} />
-                إكسل
+                Excel
               </button>
               <button className="ghost" type="button" onClick={exportKml}>
                 <Download size={18} />
@@ -1022,7 +1022,7 @@ function App() {
               </button>
               <label className={`ghost fileButton ${busy ? 'disabled' : ''}`}>
                 <Upload size={18} />
-                رفع إكسل
+                Upload Excel
                 <input type="file" accept=".xlsx,.xls" onChange={importExcel} disabled={busy} />
               </label>
             </>
@@ -1033,17 +1033,17 @@ function App() {
       <section className="stats">
         <article>
           <ClipboardList size={19} />
-          <span>الأبنية</span>
+          <span>Buildings</span>
           <strong>{totals.buildings}</strong>
         </article>
         <article>
           <MapPin size={19} />
-          <span>الأعمدة</span>
+          <span>Poles</span>
           <strong>{totals.poles}</strong>
         </article>
         <article>
           <CheckCircle2 size={19} />
-          <span>زراعة الأعمدة</span>
+          <span>Pole Planting</span>
           <strong>{totals.column_checks}</strong>
         </article>
       </section>
@@ -1051,10 +1051,10 @@ function App() {
       {isAdmin && (
         <section className="adminPages" aria-label="Admin pages">
           <button type="button" className={adminPage === 'data' ? 'active' : ''} onClick={() => setAdminPage('data')}>
-            البيانات
+            Data
           </button>
           <button type="button" className={adminPage === 'photos' ? 'active' : ''} onClick={() => setAdminPage('photos')}>
-            الصور
+            Photos
             <span>{visiblePhotos.length}</span>
           </button>
         </section>
@@ -1063,29 +1063,29 @@ function App() {
       {isAdmin && (
         <section className="adminFilters">
           <label>
-            المنطقة
+            District
             <select value={adminFilters.district} onChange={(event) => setAdminFilters((prev) => ({ ...prev, district: event.target.value }))}>
-              <option value="">كل المناطق</option>
+              <option value="">All districts</option>
               {adminOptions.districts.map((district) => <option key={district} value={district}>{district}</option>)}
             </select>
           </label>
           <label>
-            الفني
+            Technician
             <select value={adminFilters.techName} onChange={(event) => setAdminFilters((prev) => ({ ...prev, techName: event.target.value }))}>
-              <option value="">كل الفنيين</option>
+              <option value="">All technicians</option>
               {adminOptions.techs.map((tech) => <option key={tech} value={tech}>{tech}</option>)}
             </select>
           </label>
           <label>
-            النوع
+            Type
             <select value={adminFilters.type} onChange={(event) => setAdminFilters((prev) => ({ ...prev, type: event.target.value }))}>
-              <option value="all">كل الأنواع</option>
+              <option value="all">All types</option>
               {Object.entries(resources).map(([key]) => <option key={key} value={key}>{getResourceUiLabel(key)}</option>)}
             </select>
           </label>
           <label className="search">
             <Search size={17} />
-            <input placeholder="بحث..." value={query} onChange={(event) => setQuery(event.target.value)} />
+            <input placeholder="Search..." value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
         </section>
       )}
@@ -1241,8 +1241,8 @@ function App() {
       {isAdmin && adminPage === 'photos' && (
         <section className="photosPage">
           <div className="recordsHeader">
-            <h2>الصور</h2>
-            <span>{visiblePhotos.length} صورة</span>
+            <h2>Photos</h2>
+            <span>{visiblePhotos.length} photos</span>
           </div>
           <div className="photoGrid">
             {visiblePhotos.map((row) => (
@@ -1268,7 +1268,7 @@ function App() {
       {(!isAdmin || adminPage === 'data') && (
       <section className="records">
         <div className="recordsHeader">
-          <h2>{isAdmin ? 'كل السجلات' : 'سجلاتي'}</h2>
+          <h2>{isAdmin ? 'All Records' : 'سجلاتي'}</h2>
           {hiddenTableRows > 0 && <span className="softHint">يظهر أول {MAX_TABLE_ROWS} من {currentRows.length} فقط. استخدم الفلاتر لعرض أدق.</span>}
           {!isAdmin && (
             <label className="search">
