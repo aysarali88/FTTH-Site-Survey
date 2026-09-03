@@ -752,8 +752,13 @@ textarea:focus {
 
 table {
   border-collapse: collapse;
-  min-width: 980px;
-  width: 100%;
+  min-width: max-content;
+  table-layout: auto;
+  width: max-content;
+}
+
+.tableWrap table {
+  min-width: 100%;
 }
 
 th,
