@@ -65,7 +65,7 @@ const resources = {
       ['tech_name', 'tech name', 'text'],
       ['notes', 'Notes', 'textarea'],
     ],
-    columns: ['id', 'latitude', 'longitude', 'building_type', 'floor_number', 'users_number', 'building_status', 'district', 'tech_name', 'record_date', 'record_time', 'photo_url'],
+    columns: ['id', 'latitude', 'longitude', 'building_type', 'floor_number', 'users_number', 'building_status', 'district', 'tech_name', 'record_date', 'record_time', 'photo_url', 'notes'],
   },
   poles: {
     title: 'الأعمدة',
@@ -96,7 +96,7 @@ const resources = {
       ['tech_name', 'tech name', 'text'],
       ['notes', 'Notes', 'textarea'],
     ],
-    columns: ['id', 'latitude', 'longitude', 'pole_owner', 'pole_type', 'pole_length', 'pole_status', 'district', 'tech_name', 'record_date', 'record_time', 'photo_url'],
+    columns: ['id', 'latitude', 'longitude', 'pole_owner', 'pole_type', 'pole_length', 'pole_status', 'district', 'tech_name', 'record_date', 'record_time', 'photo_url', 'notes'],
   },
   column_checks: {
     title: 'زراعة الأعمدة',
@@ -124,7 +124,7 @@ const resources = {
       ['is_existing', 'هل هو موجود', 'select', ['نعم', 'لا']],
       ['notes', 'ملاحظة', 'textarea'],
     ],
-    columns: ['id', 'latitude', 'longitude', 'district', 'tech_name', 'has_objection', 'is_existing', 'is_planted', 'notes', 'record_date', 'record_time', 'photo_url'],
+    columns: ['id', 'latitude', 'longitude', 'district', 'tech_name', 'has_objection', 'is_existing', 'is_planted', 'record_date', 'record_time', 'photo_url', 'notes'],
   },
 };
 
