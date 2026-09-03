@@ -783,6 +783,13 @@ td {
   font-size: 14px;
 }
 
+.notesCell {
+  max-width: 320px;
+  white-space: normal;
+  width: 320px;
+  word-break: break-word;
+}
+
 .tablePhoto {
   align-items: center;
   display: inline-flex;

@@ -1289,7 +1289,7 @@ function App() {
               {displayedRows.map((row) => (
                 <tr key={row.id}>
                   {current.columns.map((column) => (
-                    <td key={column}>
+                    <td key={column} className={column === 'notes' ? 'notesCell' : ''}>
                       {column === 'photo_url'
                         ? (row.photo_url ? (
                           <a className="tablePhoto" href={row.photo_url} target="_blank" rel="noreferrer" title="فتح الصورة">
