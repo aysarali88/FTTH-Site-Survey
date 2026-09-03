@@ -65,7 +65,7 @@ const resources = {
       ['tech_name', 'tech name', 'text'],
       ['notes', 'Notes', 'textarea'],
     ],
-    columns: ['id', 'building_type', 'floor_number', 'users_number', 'building_status', 'district', 'tech_name', 'record_date', 'record_time'],
+    columns: ['id', 'latitude', 'longitude', 'building_type', 'floor_number', 'users_number', 'building_status', 'district', 'tech_name', 'record_date', 'record_time', 'photo_url'],
   },
   poles: {
     title: 'الأعمدة',
@@ -96,7 +96,7 @@ const resources = {
       ['tech_name', 'tech name', 'text'],
       ['notes', 'Notes', 'textarea'],
     ],
-    columns: ['id', 'pole_owner', 'pole_type', 'pole_length', 'pole_status', 'district', 'tech_name', 'record_date', 'record_time'],
+    columns: ['id', 'latitude', 'longitude', 'pole_owner', 'pole_type', 'pole_length', 'pole_status', 'district', 'tech_name', 'record_date', 'record_time', 'photo_url'],
   },
   column_checks: {
     title: 'زراعة الأعمدة',
@@ -124,7 +124,7 @@ const resources = {
       ['is_existing', 'هل هو موجود', 'select', ['نعم', 'لا']],
       ['notes', 'ملاحظة', 'textarea'],
     ],
-    columns: ['id', 'district', 'tech_name', 'has_objection', 'is_existing', 'is_planted', 'notes', 'record_date', 'record_time'],
+    columns: ['id', 'latitude', 'longitude', 'district', 'tech_name', 'has_objection', 'is_existing', 'is_planted', 'notes', 'record_date', 'record_time', 'photo_url'],
   },
 };
 
@@ -142,7 +142,7 @@ const labels = {
   record_date: 'Record date',
   record_time: 'Record time',
   notes: 'Notes',
-  photo_url: 'Photo URL',
+  photo_url: 'الصورة',
   pole_owner: 'Pole owner',
   pole_type: 'Pole type',
   pole_length: 'Pole length',
@@ -507,12 +507,18 @@ function FastSurveyMarkers({ groupedRecords, onDelete, canDelete }) {
     return (
       <Popup>
         <div className="markerPopup">
-          <strong>{getResourceUiSingular(type)}</strong>
-          <span>{row.id}</span>
-          <span>{row.district || '-'}</span>
-          <span>{row.tech_name || '-'}</span>
-          <span>{formatDate(row.created_at || row.survey_date)} {formatTime(row.created_at)}</span>
-          {row.photo_url && <a href={row.photo_url} target="_blank" rel="noreferrer">Open photo</a>}
+            <strong>{getResourceUiSingular(type)}</strong>
+            <span>{row.id}</span>
+            <span>الإحداثيات: {row.latitude}, {row.longitude}</span>
+            <span>{row.district || '-'}</span>
+            <span>{row.tech_name || '-'}</span>
+            <span>{formatDate(row.created_at || row.survey_date)} {formatTime(row.created_at)}</span>
+            {row.photo_url && (
+              <a href={row.photo_url} target="_blank" rel="noreferrer">
+                <img className="popupPhoto" src={row.photo_url} alt={`صورة ${getResourceUiSingular(type)} ${row.id}`} loading="lazy" />
+                فتح الصورة
+              </a>
+            )}
           {canDelete && (
             <button type="button" className="dangerMini" onClick={() => onDelete(type, row.id)}>
               Delete point
@@ -1276,19 +1282,24 @@ function App() {
             <thead>
               <tr>
                 {current.columns.map((column) => <th key={column}>{labels[column] || column}</th>)}
-                <th>Latitude</th>
-                <th>Longitude</th>
-                <th>Photo URL</th>
                 <th>حذف</th>
               </tr>
             </thead>
             <tbody>
               {displayedRows.map((row) => (
                 <tr key={row.id}>
-                  {current.columns.map((column) => <td key={column}>{formatValue(row[column])}</td>)}
-                  <td>{row.latitude}</td>
-                  <td>{row.longitude}</td>
-                  <td>{row.photo_url ? <a href={row.photo_url} target="_blank" rel="noreferrer">فتح الصورة</a> : '-'}</td>
+                  {current.columns.map((column) => (
+                    <td key={column}>
+                      {column === 'photo_url'
+                        ? (row.photo_url ? (
+                          <a className="tablePhoto" href={row.photo_url} target="_blank" rel="noreferrer" title="فتح الصورة">
+                            <img src={row.photo_url} alt={`صورة ${getResourceUiSingular(active)} ${row.id}`} loading="lazy" />
+                            <span>فتح الصورة</span>
+                          </a>
+                        ) : '-')
+                        : formatValue(row[column])}
+                    </td>
+                  ))}
                   <td>
                     <button className="dangerIcon" type="button" onClick={() => deleteRecord(active, row.id)} title="حذف">
                       <Trash2 size={16} />
@@ -1298,7 +1309,7 @@ function App() {
               ))}
               {!currentRows.length && (
                 <tr>
-                  <td colSpan={current.columns.length + 4} className="empty">لا توجد سجلات حسب المستخدم والمنطقة الحالية.</td>
+                  <td colSpan={current.columns.length + 1} className="empty">لا توجد سجلات حسب المستخدم والمنطقة الحالية.</td>
                 </tr>
               )}
             </tbody>

@@ -533,6 +533,15 @@ button:disabled {
   min-width: 150px;
 }
 
+.popupPhoto {
+  border-radius: 6px;
+  display: block;
+  height: 90px;
+  margin-bottom: 3px;
+  object-fit: cover;
+  width: 120px;
+}
+
 .dangerMini,
 .dangerIcon {
   background: #fee2e2;
@@ -767,6 +776,29 @@ th {
 td {
   color: #1e293b;
   font-size: 14px;
+}
+
+.tablePhoto {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.tablePhoto img {
+  background: #f1f5f9;
+  border: 1px solid #dbe4ef;
+  border-radius: 6px;
+  display: block;
+  height: 48px;
+  object-fit: cover;
+  width: 64px;
+}
+
+.tablePhoto span {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .empty {
