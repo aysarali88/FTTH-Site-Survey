@@ -139,10 +139,10 @@ const labels = {
   district: 'district',
   tech_name: 'tech name',
   survey_date: 'date',
-  record_date: 'Record date',
-  record_time: 'Record time',
+  record_date: 'التاريخ',
+  record_time: 'الوقت',
   notes: 'Notes',
-  photo_url: 'الصورة',
+  photo_url: 'رابط الصورة',
   pole_owner: 'Pole owner',
   pole_type: 'Pole type',
   pole_length: 'Pole length',
@@ -1294,7 +1294,7 @@ function App() {
                         ? (row.photo_url ? (
                           <a className="tablePhoto" href={row.photo_url} target="_blank" rel="noreferrer" title="فتح الصورة">
                             <img src={row.photo_url} alt={`صورة ${getResourceUiSingular(active)} ${row.id}`} loading="lazy" />
-                            <span>فتح الصورة</span>
+                            <span>رابط الصورة</span>
                           </a>
                         ) : '-')
                         : formatValue(row[column])}
