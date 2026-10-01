@@ -2,17 +2,22 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Camera,
+  BarChart3,
   CheckCircle2,
+  CircleAlert,
   ClipboardList,
   Download,
   Expand,
+  Filter,
   LocateFixed,
   LogOut,
   MapPin,
+  MapPinned,
   Minimize2,
   Plus,
   RefreshCcw,
   Search,
+  Target,
   Trash2,
   Upload,
   UserRound,
@@ -287,6 +292,21 @@ function normalizeRow(row, type) {
   };
 }
 
+function inferCity(row) {
+  const source = `${row.city || ''} ${row.district || ''}`.toLowerCase();
+  if (source.includes('مصراتة') || source.includes('مصراته') || source.includes('misrata')) return 'Misrata';
+  if (source.includes('طرابلس') || source.includes('tripoli')) return 'Tripoli';
+  return row.city || 'Other / City not set';
+}
+
+function countBy(rows, key) {
+  return [...rows.reduce((counts, row) => {
+    const value = row[key] || 'Not set';
+    counts.set(value, (counts.get(value) || 0) + 1);
+    return counts;
+  }, new Map())].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
 function escapeXml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -547,6 +567,141 @@ function FastSurveyMarkers({ groupedRecords, onDelete, canDelete }) {
         {renderPopup(type, row)}
       </CircleMarker>
     )),
+  );
+}
+
+function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
+  const [filters, setFilters] = useState({ city: '', district: '', tech: '', status: 'all' });
+
+  const sourceRows = useMemo(
+    () => (records || []).map((row) => ({ ...normalizeRow(row, 'column_checks'), city: inferCity(row) })),
+    [records],
+  );
+
+  const cityOptions = useMemo(() => [...new Set(sourceRows.map((row) => row.city))].sort(), [sourceRows]);
+  const districtOptions = useMemo(
+    () => [...new Set(sourceRows.filter((row) => !filters.city || row.city === filters.city).map((row) => row.district).filter(Boolean))].sort(),
+    [sourceRows, filters.city],
+  );
+  const techOptions = useMemo(() => [...new Set(sourceRows.map((row) => row.tech_name).filter(Boolean))].sort(), [sourceRows]);
+
+  const filteredRows = useMemo(() => sourceRows.filter((row) => {
+    if (filters.city && row.city !== filters.city) return false;
+    if (filters.district && row.district !== filters.district) return false;
+    if (filters.tech && row.tech_name !== filters.tech) return false;
+    if (filters.status === 'planted' && !yesNoToBoolean(row.is_planted)) return false;
+    if (filters.status === 'not_planted' && yesNoToBoolean(row.is_planted)) return false;
+    if (filters.status === 'objection' && !yesNoToBoolean(row.has_objection)) return false;
+    return true;
+  }), [sourceRows, filters]);
+
+  const summary = useMemo(() => ({
+    total: filteredRows.length,
+    planted: filteredRows.filter((row) => yesNoToBoolean(row.is_planted)).length,
+    notPlanted: filteredRows.filter((row) => !yesNoToBoolean(row.is_planted)).length,
+    objections: filteredRows.filter((row) => yesNoToBoolean(row.has_objection)).length,
+    existing: filteredRows.filter((row) => yesNoToBoolean(row.is_existing)).length,
+  }), [filteredRows]);
+
+  const technicians = useMemo(() => countBy(filteredRows, 'tech_name'), [filteredRows]);
+  const cities = useMemo(() => countBy(filteredRows, 'city'), [filteredRows]);
+  const districts = useMemo(() => {
+    const groups = new Map();
+    filteredRows.forEach((row) => {
+      const key = `${row.city}|||${row.district || 'Not set'}`;
+      const current = groups.get(key) || { city: row.city, district: row.district || 'Not set', total: 0, planted: 0, objections: 0 };
+      current.total += 1;
+      current.planted += yesNoToBoolean(row.is_planted) ? 1 : 0;
+      current.objections += yesNoToBoolean(row.has_objection) ? 1 : 0;
+      groups.set(key, current);
+    });
+    return [...groups.values()].sort((a, b) => b.total - a.total || a.city.localeCompare(b.city));
+  }, [filteredRows]);
+
+  const mapRows = filteredRows
+    .filter((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)))
+    .slice(0, MAX_MAP_MARKERS);
+  const centerRow = mapRows[0];
+  const mapCenter = centerRow ? [Number(centerRow.latitude), Number(centerRow.longitude)] : [defaultLocation.latitude, defaultLocation.longitude];
+  const maxTechnicianCount = Math.max(technicians[0]?.[1] || 1, 1);
+  const maxCityCount = Math.max(cities[0]?.[1] || 1, 1);
+
+  function updateFilter(key, value) {
+    setFilters((previous) => ({ ...previous, [key]: value, ...(key === 'city' ? { district: '' } : {}) }));
+  }
+
+  return (
+    <section className="plantingDashboard" aria-label="Pole planting dashboard">
+      <div className="dashboardHero">
+        <div>
+          <p className="dashboardEyebrow">Field Operations</p>
+          <h2>Pole Planting Dashboard</h2>
+          <p>Track planting progress, technicians, cities, and districts from one clear view.</p>
+        </div>
+        <div className="dashboardHeroActions">
+          <span className="dashboardLive"><span /> Live data</span>
+          <button type="button" className="dashboardRefresh" onClick={onRefresh} disabled={busy}>
+            <RefreshCcw size={17} />
+            {busy ? 'Refreshing...' : 'Refresh data'}
+          </button>
+        </div>
+      </div>
+
+      <div className="dashboardFilters">
+        <div className="dashboardFilterTitle"><Filter size={17} /> Filters</div>
+        <label>City<select value={filters.city} onChange={(event) => updateFilter('city', event.target.value)}><option value="">All cities</option>{cityOptions.map((city) => <option key={city} value={city}>{city}</option>)}</select></label>
+        <label>District<select value={filters.district} onChange={(event) => updateFilter('district', event.target.value)}><option value="">All districts</option>{districtOptions.map((district) => <option key={district} value={district}>{district}</option>)}</select></label>
+        <label>Technician<select value={filters.tech} onChange={(event) => updateFilter('tech', event.target.value)}><option value="">All technicians</option>{techOptions.map((tech) => <option key={tech} value={tech}>{tech}</option>)}</select></label>
+        <label>Status<select value={filters.status} onChange={(event) => updateFilter('status', event.target.value)}><option value="all">All statuses</option><option value="planted">Planted</option><option value="not_planted">Not planted</option><option value="objection">With objection</option></select></label>
+      </div>
+
+      <div className="dashboardKpis">
+        <article className="dashboardKpi kpiBlue"><span><Target size={18} /> Total points</span><strong>{summary.total}</strong><small>Filtered records</small></article>
+        <article className="dashboardKpi kpiGreen"><span><CheckCircle2 size={18} /> Planted</span><strong>{summary.planted}</strong><small>{summary.total ? Math.round((summary.planted / summary.total) * 100) : 0}% of total</small></article>
+        <article className="dashboardKpi kpiAmber"><span><CircleAlert size={18} /> Not planted</span><strong>{summary.notPlanted}</strong><small>Needs follow-up</small></article>
+        <article className="dashboardKpi kpiRed"><span><CircleAlert size={18} /> Objections</span><strong>{summary.objections}</strong><small>Reported points</small></article>
+        <article className="dashboardKpi kpiViolet"><span><MapPinned size={18} /> Existing poles</span><strong>{summary.existing}</strong><small>Already available</small></article>
+      </div>
+
+      <div className="dashboardMainGrid">
+        <article className="dashboardPanel dashboardMapPanel">
+          <div className="dashboardPanelHead"><div><h3>Planting map</h3><span>{mapRows.length}{filteredRows.length > MAX_MAP_MARKERS ? ` of ${filteredRows.length}` : ''} points shown</span></div><MapPinned size={20} /></div>
+          <div className="dashboardMapWrap">
+            <MapContainer center={mapCenter} zoom={12} maxZoom={22} scrollWheelZoom className="dashboardMap" zoomControl>
+              <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' maxZoom={22} maxNativeZoom={19} url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} onDelete={onDelete} canDelete />
+            </MapContainer>
+          </div>
+        </article>
+
+        <article className="dashboardPanel dashboardListPanel">
+          <div className="dashboardPanelHead"><div><h3>By technician</h3><span>Number of planting records</span></div><BarChart3 size={20} /></div>
+          {technicians.length ? technicians.slice(0, 8).map(([name, count]) => (
+            <div className="dashboardBarRow" key={name}>
+              <div><strong>{name}</strong><span>{count} points</span></div>
+              <div className="dashboardBar"><i style={{ width: `${Math.max((count / maxTechnicianCount) * 100, 5)}%` }} /></div>
+            </div>
+          )) : <div className="dashboardEmpty">No technician data for the selected filters.</div>}
+        </article>
+      </div>
+
+      <div className="dashboardSecondaryGrid">
+        <article className="dashboardPanel">
+          <div className="dashboardPanelHead"><div><h3>By city</h3><span>Misrata, Tripoli, and other groups</span></div><MapPin size={20} /></div>
+          {cities.length ? <div className="cityCards">{cities.map(([city, count]) => <div className="cityCard" key={city}><div><strong>{city}</strong><span>{count} points</span></div><div className="cityProgress"><i style={{ width: `${Math.max((count / maxCityCount) * 100, 5)}%` }} /></div></div>)}</div> : <div className="dashboardEmpty">No city data for the selected filters.</div>}
+        </article>
+
+        <article className="dashboardPanel districtPanel">
+          <div className="dashboardPanelHead"><div><h3>District breakdown</h3><span>City and district performance</span></div><ClipboardList size={20} /></div>
+          <div className="dashboardMiniTableWrap"><table className="dashboardMiniTable"><thead><tr><th>City</th><th>District</th><th>Total</th><th>Planted</th><th>Objections</th></tr></thead><tbody>{districts.slice(0, 12).map((item) => <tr key={`${item.city}-${item.district}`}><td>{item.city}</td><td>{item.district}</td><td>{item.total}</td><td className="successText">{item.planted}</td><td className="dangerText">{item.objections}</td></tr>)}{!districts.length && <tr><td colSpan="5" className="dashboardEmptyCell">No district data.</td></tr>}</tbody></table></div>
+        </article>
+      </div>
+
+      <article className="dashboardPanel dashboardRecentPanel">
+        <div className="dashboardPanelHead"><div><h3>Recent pole planting records</h3><span>Latest points matching the current filters</span></div><span className="dashboardResultCount">{filteredRows.length} records</span></div>
+        <div className="dashboardRecentWrap"><table className="dashboardRecentTable"><thead><tr><th>ID</th><th>City</th><th>District</th><th>Technician</th><th>Planted</th><th>Objection</th><th>Date</th><th>Location</th></tr></thead><tbody>{filteredRows.slice(0, 15).map((row) => <tr key={row.id}><td className="idCell">{row.id}</td><td>{row.city}</td><td>{row.district || '-'}</td><td>{row.tech_name || '-'}</td><td><span className={`statusPill ${yesNoToBoolean(row.is_planted) ? 'statusGood' : 'statusWarn'}`}>{yesNoToBoolean(row.is_planted) ? 'Yes' : 'No'}</span></td><td><span className={`statusPill ${yesNoToBoolean(row.has_objection) ? 'statusBad' : 'statusGood'}`}>{yesNoToBoolean(row.has_objection) ? 'Yes' : 'No'}</span></td><td>{row.record_date} {row.record_time}</td><td dir="ltr">{row.latitude}, {row.longitude}</td></tr>)}{!filteredRows.length && <tr><td colSpan="8" className="dashboardEmptyCell">No records for the selected filters.</td></tr>}</tbody></table></div>
+      </article>
+    </section>
   );
 }
 
@@ -990,7 +1145,7 @@ function App() {
   }
 
   return (
-    <main className={`app ${isAdmin ? 'adminMode' : ''}`}>
+    <main className={`app ${isAdmin ? 'adminMode' : ''} ${isAdmin && adminPage === 'dashboard' ? 'dashboardMode' : ''}`}>
       <header className="topbar">
         <div>
           <p className="eyebrow">Site Survey Pro</p>
@@ -1030,7 +1185,7 @@ function App() {
         </div>
       </header>
 
-      <section className="stats">
+      {(!isAdmin || adminPage !== 'dashboard') && <section className="stats">
         <article>
           <ClipboardList size={19} />
           <span>Buildings</span>
@@ -1046,10 +1201,13 @@ function App() {
           <span>Pole Planting</span>
           <strong>{totals.column_checks}</strong>
         </article>
-      </section>
+      </section>}
 
       {isAdmin && (
         <section className="adminPages" aria-label="Admin pages">
+          <button type="button" className={adminPage === 'dashboard' ? 'active' : ''} onClick={() => setAdminPage('dashboard')}>
+            Dashboard
+          </button>
           <button type="button" className={adminPage === 'data' ? 'active' : ''} onClick={() => setAdminPage('data')}>
             Data
           </button>
@@ -1060,7 +1218,11 @@ function App() {
         </section>
       )}
 
-      {isAdmin && (
+      {isAdmin && adminPage === 'dashboard' && (
+        <PolePlantingDashboard records={records.column_checks} onRefresh={loadAll} busy={busy} onDelete={deleteRecord} />
+      )}
+
+      {(!isAdmin || adminPage !== 'dashboard') && isAdmin && (
         <section className="adminFilters">
           <label>
             District
@@ -1090,7 +1252,7 @@ function App() {
         </section>
       )}
 
-      <nav className="tabs" aria-label="Survey sections">
+      {(!isAdmin || adminPage !== 'dashboard') && <nav className="tabs" aria-label="Survey sections">
         {Object.entries(resources).map(([key, item]) => (
           <button
             key={key}
@@ -1106,11 +1268,11 @@ function App() {
             {getResourceUiLabel(key)}
           </button>
         ))}
-      </nav>
+      </nav>}
 
-      {message && <div className="notice">{message}</div>}
+      {message && (!isAdmin || adminPage !== 'dashboard') && <div className="notice">{message}</div>}
 
-      <section className="workspace">
+      {(!isAdmin || adminPage !== 'dashboard') && <section className="workspace">
         <div className={`mapShell ${mapExpanded ? 'expandedMap' : ''}`}>
           <button
             className="mapExpandButton"
@@ -1236,7 +1398,7 @@ function App() {
             {busy ? 'جارٍ الحفظ...' : 'حفظ السجل'}
           </button>
         </form>
-      </section>
+      </section>}
 
       {isAdmin && adminPage === 'photos' && (
         <section className="photosPage">
