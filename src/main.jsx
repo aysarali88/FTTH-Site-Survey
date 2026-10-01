@@ -4,7 +4,6 @@ import {
   Camera,
   BarChart3,
   CheckCircle2,
-  CircleAlert,
   ClipboardList,
   Download,
   Expand,
@@ -605,16 +604,11 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
     return true;
   }), [sourceRows, filters]);
 
-  const summary = useMemo(() => ({
-    total: filteredRows.length,
-    planted: filteredRows.filter((row) => yesNoToBoolean(row.is_planted)).length,
-    notPlanted: filteredRows.filter((row) => !yesNoToBoolean(row.is_planted)).length,
-    objections: filteredRows.filter((row) => yesNoToBoolean(row.has_objection)).length,
-    existing: filteredRows.filter((row) => yesNoToBoolean(row.is_existing)).length,
-  }), [filteredRows]);
+  const summary = useMemo(() => ({ total: filteredRows.length }), [filteredRows]);
 
   const technicians = useMemo(() => countBy(filteredRows, 'tech_name'), [filteredRows]);
   const cities = useMemo(() => countBy(filteredRows, 'city'), [filteredRows]);
+  const cityCounts = useMemo(() => Object.fromEntries(cities), [cities]);
   const districts = useMemo(() => {
     const groups = new Map();
     filteredRows.forEach((row) => {
@@ -666,11 +660,9 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
       </div>
 
       <div className="dashboardKpis">
-        <article className="dashboardKpi kpiBlue"><span><Target size={18} /> Total points</span><strong>{summary.total}</strong><small>Filtered records</small></article>
-        <article className="dashboardKpi kpiGreen"><span><CheckCircle2 size={18} /> Planted</span><strong>{summary.planted}</strong><small>{summary.total ? Math.round((summary.planted / summary.total) * 100) : 0}% of total</small></article>
-        <article className="dashboardKpi kpiAmber"><span><CircleAlert size={18} /> Not planted</span><strong>{summary.notPlanted}</strong><small>Needs follow-up</small></article>
-        <article className="dashboardKpi kpiRed"><span><CircleAlert size={18} /> Objections</span><strong>{summary.objections}</strong><small>Reported points</small></article>
-        <article className="dashboardKpi kpiViolet"><span><MapPinned size={18} /> Existing poles</span><strong>{summary.existing}</strong><small>Already available</small></article>
+        <article className="dashboardKpi kpiBlue"><span><MapPin size={18} /> Misrata poles</span><strong>{cityCounts.Misrata || 0}</strong><small>Planting records</small></article>
+        <article className="dashboardKpi kpiViolet"><span><MapPinned size={18} /> Tripoli poles</span><strong>{cityCounts.Tripoli || 0}</strong><small>Planting records</small></article>
+        <article className="dashboardKpi kpiGreen"><span><Target size={18} /> Total poles</span><strong>{summary.total}</strong><small>All filtered records</small></article>
       </div>
 
       <div className="dashboardMainGrid">
