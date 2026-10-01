@@ -338,6 +338,51 @@ function downloadTextFile(content, fileName, type) {
   URL.revokeObjectURL(url);
 }
 
+async function compressImageFile(file) {
+  if (!file?.type?.startsWith('image/')) return file;
+
+  const maxDimension = 1600;
+  const quality = 0.78;
+  let bitmap;
+
+  try {
+    if (typeof createImageBitmap === 'function') {
+      bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    }
+  } catch {
+    bitmap = null;
+  }
+
+  if (!bitmap) {
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      bitmap = await new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = objectUrl;
+      });
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
+  const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  if (typeof bitmap.close === 'function') bitmap.close();
+
+  const compressed = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+  if (!compressed) return file;
+
+  return new File([compressed], `${file.name.replace(/\.[^.]+$/, '')}.jpg`, {
+    type: 'image/jpeg',
+    lastModified: Date.now(),
+  });
+}
+
 function kmlTypeLabel(type) {
   if (type === 'buildings') return 'بناية';
   if (type === 'poles') return 'عمود';
@@ -856,9 +901,10 @@ function App() {
 
   async function uploadPhoto(recordId) {
     if (!photoFile) return form.photo_url || '';
-    const extension = photoFile.name.split('.').pop() || 'jpg';
+    const uploadFile = await compressImageFile(photoFile);
+    const extension = uploadFile.type === 'image/jpeg' ? 'jpg' : (uploadFile.name.split('.').pop() || 'jpg');
     const path = `${active}/${recordId}-${Date.now()}.${extension}`;
-    const { error } = await supabase.storage.from(SUPABASE_BUCKET).upload(path, photoFile, { upsert: true });
+    const { error } = await supabase.storage.from(SUPABASE_BUCKET).upload(path, uploadFile, { upsert: true, contentType: uploadFile.type });
     if (error) throw error;
     const { data } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path);
     return data.publicUrl;
