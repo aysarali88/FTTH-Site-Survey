@@ -36,7 +36,7 @@ const PROFILE_KEY = 'site-survey-profile';
 const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || '1234';
 const IMPORT_BATCH_SIZE = 500;
 const MAX_IMPORTED_RECORDS_TO_RENDER = 500;
-const MAX_MAP_MARKERS = 250;
+const MAX_MAP_MARKERS = 2000;
 const MAX_TABLE_ROWS = 500;
 
 const resources = {
