@@ -51,6 +51,7 @@ const resources = {
       id: null,
       latitude: defaultLocation.latitude,
       longitude: defaultLocation.longitude,
+      city: '',
       building_type: '',
       floor_number: '',
       users_number: '',
@@ -70,7 +71,7 @@ const resources = {
       ['tech_name', 'tech name', 'text'],
       ['notes', 'Notes', 'textarea'],
     ],
-    columns: ['id', 'latitude', 'longitude', 'building_type', 'floor_number', 'users_number', 'building_status', 'district', 'tech_name', 'record_date', 'record_time', 'photo_url', 'notes'],
+    columns: ['id', 'latitude', 'longitude', 'city', 'building_type', 'floor_number', 'users_number', 'building_status', 'district', 'tech_name', 'record_date', 'record_time', 'photo_url', 'notes'],
   },
   poles: {
     title: 'الأعمدة',
@@ -82,6 +83,7 @@ const resources = {
       id: null,
       latitude: defaultLocation.latitude,
       longitude: defaultLocation.longitude,
+      city: '',
       pole_owner: '',
       pole_type: '',
       pole_length: '',
@@ -101,7 +103,7 @@ const resources = {
       ['tech_name', 'tech name', 'text'],
       ['notes', 'Notes', 'textarea'],
     ],
-    columns: ['id', 'latitude', 'longitude', 'pole_owner', 'pole_type', 'pole_length', 'pole_status', 'district', 'tech_name', 'record_date', 'record_time', 'photo_url', 'notes'],
+    columns: ['id', 'latitude', 'longitude', 'city', 'pole_owner', 'pole_type', 'pole_length', 'pole_status', 'district', 'tech_name', 'record_date', 'record_time', 'photo_url', 'notes'],
   },
   column_checks: {
     title: 'زراعة الأعمدة',
@@ -113,6 +115,7 @@ const resources = {
       id: null,
       latitude: defaultLocation.latitude,
       longitude: defaultLocation.longitude,
+      city: '',
       district: '',
       tech_name: '',
       has_objection: 'لا',
@@ -129,7 +132,7 @@ const resources = {
       ['is_existing', 'هل هو موجود', 'select', ['نعم', 'لا']],
       ['notes', 'ملاحظة', 'textarea'],
     ],
-    columns: ['id', 'latitude', 'longitude', 'district', 'tech_name', 'has_objection', 'is_existing', 'is_planted', 'record_date', 'record_time', 'photo_url', 'notes'],
+    columns: ['id', 'latitude', 'longitude', 'city', 'district', 'tech_name', 'has_objection', 'is_existing', 'is_planted', 'record_date', 'record_time', 'photo_url', 'notes'],
   },
 };
 
@@ -137,6 +140,7 @@ const labels = {
   id: 'ID',
   latitude: 'Latitude',
   longitude: 'Longitude',
+  city: 'City',
   building_type: 'Building type',
   floor_number: 'Floor number',
   users_number: 'Users number',
@@ -213,7 +217,9 @@ const markerColors = {
 function readSavedProfile() {
   try {
     const saved = localStorage.getItem(PROFILE_KEY);
-    return saved ? JSON.parse(saved) : null;
+    const profile = saved ? JSON.parse(saved) : null;
+    if (profile?.role === 'tech' && !profile.city) return null;
+    return profile;
   } catch {
     return null;
   }
@@ -223,6 +229,7 @@ function applyProfileToForm(form, profile) {
   if (!profile) return form;
   return {
     ...form,
+    city: 'city' in form ? profile.city : form.city,
     district: 'district' in form ? profile.district : form.district,
     tech_name: 'tech_name' in form ? profile.techName : form.tech_name,
   };
@@ -413,6 +420,7 @@ function buildRowsFromWorkbook(workbook) {
         id: readCell(row, ['ID']) || makeRecordId('buildings'),
         latitude: toNumberOrNull(readCell(row, ['Latitude', 'latitude'])),
         longitude: toNumberOrNull(readCell(row, ['Longitude', 'longitude'])),
+        city: readCell(row, ['City', 'city']),
         building_type: readCell(row, ['Building type', 'building_type']),
         floor_number: toNumberOrNull(readCell(row, ['Floor number', 'floor_number'])),
         users_number: toNumberOrNull(readCell(row, ['Users number', 'users_number'])),
@@ -429,6 +437,7 @@ function buildRowsFromWorkbook(workbook) {
         id: readCell(row, ['ID']) || makeRecordId('poles'),
         latitude: toNumberOrNull(readCell(row, ['Latitude', 'latitude'])),
         longitude: toNumberOrNull(readCell(row, ['Longitude', 'longitude'])),
+        city: readCell(row, ['City', 'city']),
         pole_owner: readCell(row, ['Pole owner', 'pole_owner']),
         pole_type: readCell(row, ['Pole type', 'pole_type']),
         pole_length: toNumberOrNull(readCell(row, ['Pole length', 'pole_length'])),
@@ -445,6 +454,7 @@ function buildRowsFromWorkbook(workbook) {
         id: readCell(row, ['ID']) || makeRecordId('column_checks'),
         latitude: toNumberOrNull(readCell(row, ['Latitude', 'latitude'])),
         longitude: toNumberOrNull(readCell(row, ['Longitude', 'longitude'])),
+        city: readCell(row, ['City', 'city']),
         district: readCell(row, ['district', 'District']),
         tech_name: readCell(row, ['tech name', 'Technician', 'tech_name']),
         has_objection: excelYesNoToBoolean(readCell(row, [labels.has_objection, 'has_objection', 'Has objection'])),
@@ -1030,6 +1040,7 @@ function App() {
         ID: row.id,
         Latitude: row.latitude,
         Longitude: row.longitude,
+        City: row.city || '',
         'Building type': row.building_type || '',
         'Floor number': row.floor_number ?? '',
         'Users number': row.users_number ?? '',
@@ -1045,6 +1056,7 @@ function App() {
         ID: row.id,
         Latitude: row.latitude,
         Longitude: row.longitude,
+        City: row.city || '',
         'Pole owner': row.pole_owner || '',
         'Pole type': row.pole_type || '',
         'Pole length': row.pole_length ?? '',
@@ -1060,6 +1072,7 @@ function App() {
         ID: row.id,
         Latitude: row.latitude,
         Longitude: row.longitude,
+        City: row.city || '',
         district: row.district || '',
         'tech name': row.tech_name || '',
         date: row.record_date,
@@ -1155,7 +1168,7 @@ function App() {
           <div className="profilePill" title="بيانات المستخدم الحالية">
             <UserRound size={17} />
             <span>{profile.techName}</span>
-            <strong>{isAdmin ? 'Admin' : profile.district}</strong>
+            <strong>{isAdmin ? 'Admin' : `${profile.city} · ${profile.district}`}</strong>
           </div>
           <button className="ghost" type="button" onClick={changeProfile} aria-label="Logout">
             <LogOut size={18} />
@@ -1485,6 +1498,7 @@ function App() {
 
 function LoginPage({ onSave }) {
   const [techName, setTechName] = useState('');
+  const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
   const [adminMode, setAdminMode] = useState(false);
   const [adminPin, setAdminPin] = useState('');
@@ -1501,8 +1515,8 @@ function LoginPage({ onSave }) {
       onSave({ techName: techName.trim() || 'Admin', district: 'ALL', role: 'admin' });
       return;
     }
-    if (!techName.trim() || !district.trim()) return;
-    onSave({ techName: techName.trim(), district: district.trim(), role: 'tech' });
+    if (!techName.trim() || !city || !district.trim()) return;
+    onSave({ techName: techName.trim(), city, district: district.trim(), role: 'tech' });
   }
 
   return (
@@ -1526,6 +1540,16 @@ function LoginPage({ onSave }) {
         </label>
         {!adminMode && (
           <label>
+            City
+            <select value={city} onChange={(event) => setCity(event.target.value)}>
+              <option value="">Select city...</option>
+              <option value="Tripoli">Tripoli</option>
+              <option value="Misrata">Misrata</option>
+            </select>
+          </label>
+        )}
+        {!adminMode && (
+          <label>
             المنطقة
             <input value={district} onChange={(event) => setDistrict(event.target.value)} placeholder="مثال: حي الأندلس - المنطقة 2" />
           </label>
@@ -1539,7 +1563,7 @@ function LoginPage({ onSave }) {
 
         {error && <div className="notice">{error}</div>}
 
-        <button className="save" type="submit" disabled={adminMode ? !adminPin.trim() : !techName.trim() || !district.trim()}>
+        <button className="save" type="submit" disabled={adminMode ? !adminPin.trim() : !techName.trim() || !city || !district.trim()}>
           دخول التطبيق
         </button>
       </form>

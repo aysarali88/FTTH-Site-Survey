@@ -4,6 +4,7 @@ create table if not exists public.buildings (
   id text primary key,
   latitude double precision not null,
   longitude double precision not null,
+  city text,
   building_type text,
   floor_number integer,
   users_number integer,
@@ -22,6 +23,7 @@ create table if not exists public.poles (
   id text primary key,
   latitude double precision not null,
   longitude double precision not null,
+  city text,
   pole_owner text,
   pole_type text,
   pole_length numeric,
@@ -40,6 +42,7 @@ create table if not exists public.column_checks (
   id text primary key,
   latitude double precision not null,
   longitude double precision not null,
+  city text,
   district text,
   tech_name text,
   has_objection boolean not null default false,
@@ -53,6 +56,15 @@ create table if not exists public.column_checks (
 
 alter table public.column_checks
 add column if not exists district text;
+
+alter table public.buildings
+add column if not exists city text;
+
+alter table public.poles
+add column if not exists city text;
+
+alter table public.column_checks
+add column if not exists city text;
 
 alter table public.column_checks
 add column if not exists tech_name text;
