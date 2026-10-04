@@ -43,6 +43,70 @@ for each row execute function public.handle_new_user_profile();
 
 grant select on public.user_profiles to authenticated;
 
+create or replace function public.current_app_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select role from public.user_profiles where id = (select auth.uid());
+$$;
+
+revoke all on function public.current_app_role() from public;
+grant execute on function public.current_app_role() to authenticated;
+
+create table if not exists public.planned_poles (
+  id text primary key,
+  latitude double precision not null,
+  longitude double precision not null,
+  city text,
+  district text,
+  point_name text,
+  validation_status text not null default 'pending' check (validation_status in ('pending', 'validated', 'rejected', 'planted')),
+  validation_notes text,
+  validated_by text,
+  validated_at timestamptz,
+  is_planted boolean not null default false,
+  planted_record_id text,
+  created_by text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.planned_poles enable row level security;
+
+drop policy if exists "authenticated read planned poles" on public.planned_poles;
+create policy "authenticated read planned poles" on public.planned_poles
+for select to authenticated using (public.current_app_role() in ('admin', 'design', 'engineer', 'supervisor'));
+
+drop policy if exists "design insert planned poles" on public.planned_poles;
+create policy "design insert planned poles" on public.planned_poles
+for insert to authenticated with check (public.current_app_role() in ('admin', 'design'));
+
+drop policy if exists "engineer validate planned poles" on public.planned_poles;
+create policy "engineer validate planned poles" on public.planned_poles
+for update to authenticated
+using (public.current_app_role() in ('admin', 'engineer'))
+with check (public.current_app_role() in ('admin', 'engineer'));
+
+drop policy if exists "supervisor plant planned poles" on public.planned_poles;
+create policy "supervisor plant planned poles" on public.planned_poles
+for update to authenticated
+using (public.current_app_role() in ('admin', 'supervisor'))
+with check (public.current_app_role() in ('admin', 'supervisor'));
+
+drop policy if exists "design delete planned poles" on public.planned_poles;
+create policy "design delete planned poles" on public.planned_poles
+for delete to authenticated using (public.current_app_role() in ('admin', 'design'));
+
+drop trigger if exists planned_poles_set_updated_at on public.planned_poles;
+create trigger planned_poles_set_updated_at
+before update on public.planned_poles
+for each row execute function public.set_updated_at();
+
+grant select, insert, update, delete on public.planned_poles to authenticated;
+
 create table if not exists public.buildings (
   id text primary key,
   latitude double precision not null,

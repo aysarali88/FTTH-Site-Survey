@@ -25,6 +25,7 @@ import {
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-rotate';
 import './styles.css';
@@ -469,6 +470,35 @@ function finalizeImportRows(parsedRows) {
   return { rows: deduped, duplicateCount };
 }
 
+async function readKmlFromFile(file) {
+  const name = file.name.toLowerCase();
+  if (!name.endsWith('.kmz')) return file.text();
+  const zip = await JSZip.loadAsync(file);
+  const entry = Object.values(zip.files).find((item) => !item.dir && item.name.toLowerCase().endsWith('.kml'));
+  if (!entry) throw new Error('لم يتم العثور على ملف KML داخل KMZ.');
+  return entry.async('text');
+}
+
+function parseKmlPoints(text) {
+  const xml = new DOMParser().parseFromString(text, 'application/xml');
+  if (xml.querySelector('parsererror')) throw new Error('ملف KML غير صالح.');
+  const points = [];
+  xml.querySelectorAll('Placemark').forEach((placemark, index) => {
+    const coordinateNode = placemark.querySelector('Point coordinates, coordinates');
+    const raw = coordinateNode?.textContent?.trim() || '';
+    const firstCoordinate = raw.split(/\s+/).find(Boolean) || '';
+    const [longitude, latitude] = firstCoordinate.split(',').map(Number);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+    points.push({
+      id: `PLAN-${Date.now()}-${String(index + 1).padStart(4, '0')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      latitude,
+      longitude,
+      point_name: placemark.querySelector('name')?.textContent?.trim() || `Point ${index + 1}`,
+    });
+  });
+  return points;
+}
+
 function buildRowsFromWorkbook(workbook) {
   const buildingRows = getWorksheetRows(workbook, ['Buildings', 'Building', 'بنايات', 'اضافه بنايه']);
   const poleRows = getWorksheetRows(workbook, ['Poles', 'Pole', 'اعمدة', 'اضافه عمود']);
@@ -768,11 +798,84 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
   );
 }
 
+function DesignWorkspace({ profile, plannedRows, plantingRows, onUpload, onRefresh, onLogout, busy }) {
+  const [city, setCity] = useState(profile.city || 'Misrata');
+  const [district, setDistrict] = useState(profile.district || '');
+  const [error, setError] = useState('');
+
+  async function handleFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setError('');
+    try {
+      const text = await readKmlFromFile(file);
+      const points = parseKmlPoints(text);
+      if (!points.length) throw new Error('لم يتم العثور على نقاط داخل الملف.');
+      await onUpload(points, { city, district, fileName: file.name });
+    } catch (uploadError) {
+      setError(uploadError.message);
+    }
+  }
+
+  const pending = plannedRows.filter((row) => row.validation_status === 'pending').length;
+  const validated = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status)).length;
+
+  return (
+    <main className="app adminMode">
+      <header className="topbar">
+        <div><p className="eyebrow">Site Survey Pro</p><h1>Design Workspace</h1></div>
+        <div className="actions">
+          <div className="profilePill"><UserRound size={17} /><span>{profile.techName}</span><strong>Design</strong></div>
+          <button className="ghost" type="button" onClick={onLogout}><LogOut size={18} /> Logout</button>
+          <button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={18} /> Refresh</button>
+        </div>
+      </header>
+
+      <section className="stats">
+        <article><Upload size={19} /><span>Imported points</span><strong>{plannedRows.length}</strong></article>
+        <article><Target size={19} /><span>Pending validation</span><strong>{pending}</strong></article>
+        <article><CheckCircle2 size={19} /><span>Validated / planted</span><strong>{validated}</strong></article>
+      </section>
+
+      <section className="records" style={{ padding: 20, marginBottom: 16 }}>
+        <div className="recordsHeader"><div><h2>Upload KMZ plan</h2><span>Files are stored as pending validation points.</span></div></div>
+        <div className="fieldGrid" style={{ marginTop: 14 }}>
+          <label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label>
+          <label>District<input value={district} onChange={(event) => setDistrict(event.target.value)} placeholder="Optional district" /></label>
+        </div>
+        <label className="ghost fileButton" style={{ marginTop: 14, display: 'inline-flex' }}>
+          <Upload size={18} /> {busy ? 'Uploading...' : 'Choose KMZ / KML'}
+          <input type="file" accept=".kmz,.kml,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" onChange={handleFile} disabled={busy || !city} />
+        </label>
+        {error && <div className="notice" style={{ marginTop: 14 }}>{error}</div>}
+      </section>
+
+      <section className="records">
+        <div className="recordsHeader"><h2>Planned poles</h2><span>{plannedRows.length} points</span></div>
+        <div className="tableWrap"><table><thead><tr><th>ID</th><th>Name</th><th>City</th><th>District</th><th>Latitude</th><th>Longitude</th><th>Status</th></tr></thead><tbody>
+          {plannedRows.slice(0, 500).map((row) => <tr key={row.id}><td>{row.id}</td><td>{row.point_name || '-'}</td><td>{row.city || '-'}</td><td>{row.district || '-'}</td><td>{row.latitude}</td><td>{row.longitude}</td><td>{row.validation_status}</td></tr>)}
+          {!plannedRows.length && <tr><td colSpan="7" className="empty">No planned points yet.</td></tr>}
+        </tbody></table></div>
+      </section>
+
+      <section className="records" style={{ marginTop: 16 }}>
+        <div className="recordsHeader"><h2>Planting records</h2><span>{plantingRows.length} records</span></div>
+        <div className="tableWrap"><table><thead><tr><th>ID</th><th>City</th><th>District</th><th>Technician</th><th>Planted</th><th>Date</th></tr></thead><tbody>
+          {plantingRows.slice(0, 200).map((row) => <tr key={row.id}><td>{row.id}</td><td>{row.city || '-'}</td><td>{row.district || '-'}</td><td>{row.tech_name || '-'}</td><td>{booleanToYesNo(row.is_planted)}</td><td>{row.record_date || '-'}</td></tr>)}
+          {!plantingRows.length && <tr><td colSpan="6" className="empty">No planting records yet.</td></tr>}
+        </tbody></table></div>
+      </section>
+    </main>
+  );
+}
+
 function App() {
   const [profile, setProfile] = useState(readSavedProfile);
   const [active, setActive] = useState('buildings');
   const [forms, setForms] = useState(() => makeEmptyForms(readSavedProfile()));
   const [records, setRecords] = useState({ buildings: [], poles: [], column_checks: [] });
+  const [plannedRows, setPlannedRows] = useState([]);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -951,10 +1054,37 @@ function App() {
         if (error) throw error;
         nextRecords[key] = data || [];
       }
+      const { data: planned, error: plannedError } = await supabase
+        .from('planned_poles')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(5000);
+      if (plannedError && plannedError.code !== '42P01') throw plannedError;
       setRecords(nextRecords);
+      setPlannedRows(planned || []);
       setMessage('تم تحديث البيانات بنجاح.');
     } catch (error) {
       setMessage(`تعذر تحميل البيانات: ${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function uploadPlannedPoints(points, metadata) {
+    if (!hasSupabaseConfig || !supabase) throw new Error('إعدادات Supabase غير موجودة.');
+    setBusy(true);
+    try {
+      const rows = points.map((point) => ({
+        ...point,
+        city: metadata.city,
+        district: metadata.district || null,
+        created_by: profile.username || profile.techName,
+        validation_status: 'pending',
+      }));
+      const { error } = await supabase.from('planned_poles').upsert(rows, { onConflict: 'id' });
+      if (error) throw error;
+      setPlannedRows((currentRows) => [...rows, ...currentRows]);
+      setMessage(`تم رفع ${rows.length} نقطة من ${metadata.fileName}.`);
     } finally {
       setBusy(false);
     }
@@ -1274,6 +1404,10 @@ function App() {
 
   if (!profile) {
     return <LoginPage onSave={saveProfile} />;
+  }
+
+  if (profile.role === 'design') {
+    return <DesignWorkspace profile={profile} plannedRows={plannedRows} plantingRows={records.column_checks} onUpload={uploadPlannedPoints} onRefresh={loadAll} onLogout={changeProfile} busy={busy} />;
   }
 
   return (
