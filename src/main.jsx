@@ -400,6 +400,17 @@ async function compressImageFile(file) {
   });
 }
 
+async function uploadPhotoFile(file, folder, recordId) {
+  if (!file || !supabase) return '';
+  const uploadFile = await compressImageFile(file);
+  const extension = uploadFile.type === 'image/jpeg' ? 'jpg' : (uploadFile.name.split('.').pop() || 'jpg');
+  const path = `${folder}/${recordId}-${Date.now()}.${extension}`;
+  const { error } = await supabase.storage.from(SUPABASE_BUCKET).upload(path, uploadFile, { upsert: true, contentType: uploadFile.type });
+  if (error) throw error;
+  const { data } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
+
 function kmlTypeLabel(type) {
   if (type === 'buildings') return 'بناية';
   if (type === 'poles') return 'عمود';
@@ -956,6 +967,54 @@ function EngineerWorkspace({ profile, plannedRows, onRefresh, onLogout, onValida
   );
 }
 
+function SupervisorWorkspace({ profile, plannedRows, onRefresh, onLogout, onPlant, busy }) {
+  const available = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status));
+  const [selectedId, setSelectedId] = useState(available[0]?.id || '');
+  const [hasObjection, setHasObjection] = useState('لا');
+  const [isExisting, setIsExisting] = useState('لا');
+  const [notes, setNotes] = useState('');
+  const [photoFile, setPhotoFile] = useState(null);
+  const [message, setMessage] = useState('');
+  const selected = available.find((row) => row.id === selectedId) || null;
+
+  useEffect(() => {
+    if (!selected && available[0]) setSelectedId(available[0].id);
+  }, [available, selected]);
+
+  async function submit() {
+    if (!selected || selected.validation_status === 'planted') return;
+    setMessage('');
+    try {
+      await onPlant(selected, { hasObjection: hasObjection === 'نعم', isExisting: isExisting === 'نعم', notes, photoFile });
+      setPhotoFile(null);
+      setMessage('تم تسجيل زراعة العمود بنجاح.');
+    } catch (error) {
+      setMessage(`تعذر الحفظ: ${error.message}`);
+    }
+  }
+
+  return (
+    <main className="app adminMode">
+      <header className="topbar"><div><p className="eyebrow">Site Survey Pro</p><h1>Supervisor Planting</h1></div><div className="actions"><div className="profilePill"><UserRound size={17} /><span>{profile.techName}</span><strong>Supervisor</strong></div><button className="ghost" type="button" onClick={onLogout}><LogOut size={18} /> Logout</button><button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={18} /> Refresh</button></div></header>
+      <section className="stats"><article><CheckCircle2 size={19} /><span>Validated points</span><strong>{available.filter((row) => row.validation_status === 'validated').length}</strong></article><article><MapPin size={19} /><span>Planted</span><strong>{available.filter((row) => row.validation_status === 'planted').length}</strong></article><article><Camera size={19} /><span>Photos</span><strong>{available.filter((row) => row.is_planted && row.photo_url).length}</strong></article></section>
+      {message && <div className="notice">{message}</div>}
+      <section className="records" style={{ padding: 20 }}>
+        <div className="recordsHeader"><div><h2>Validated planting points</h2><span>Only engineer-approved points are shown.</span></div></div>
+        <label style={{ marginTop: 14 }}>Point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{available.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} - {row.validation_status}</option>)}</select></label>
+        {selected && <>
+          <div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div>
+          <div className="fieldGrid"><label>هل عليه اعتراض<select value={hasObjection} onChange={(event) => setHasObjection(event.target.value)}><option>لا</option><option>نعم</option></select></label><label>هل هو موجود<select value={isExisting} onChange={(event) => setIsExisting(event.target.value)}><option>لا</option><option>نعم</option></select></label></div>
+          <label style={{ marginTop: 14 }}>ملاحظة<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+          <label className="photoBox" style={{ marginTop: 14 }}><Camera size={22} /><span>{photoFile ? photoFile.name : 'التقاط صورة للعمود'}</span><input type="file" accept="image/*" capture="environment" onChange={(event) => setPhotoFile(event.target.files?.[0] || null)} /></label>
+          <button className="save" type="button" onClick={submit} disabled={busy || selected.validation_status === 'planted'}>{selected.validation_status === 'planted' ? 'تمت الزراعة' : (busy ? 'جارٍ الحفظ...' : 'تسجيل الزراعة')}</button>
+        </>}
+        {!available.length && <div className="empty" style={{ marginTop: 20 }}>لا توجد نقاط معتمدة من المهندس حتى الآن.</div>}
+      </section>
+      <section className="records" style={{ marginTop: 16 }}><div className="recordsHeader"><h2>Point list</h2><span>{available.length} points</span></div><div className="tableWrap"><table><thead><tr><th>ID</th><th>City</th><th>District</th><th>Status</th></tr></thead><tbody>{available.slice(0, 500).map((row) => <tr key={row.id} onClick={() => setSelectedId(row.id)}><td>{row.id}</td><td>{row.city || '-'}</td><td>{row.district || '-'}</td><td>{row.validation_status}</td></tr>)}</tbody></table></div></section>
+    </main>
+  );
+}
+
 function App() {
   const [profile, setProfile] = useState(readSavedProfile);
   const [active, setActive] = useState('buildings');
@@ -1208,6 +1267,28 @@ function App() {
       });
       if (error) throw error;
       setPlannedRows((currentRows) => [data, ...currentRows]);
+      return data;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function plantPlannedPole(row, details) {
+    if (!supabase) throw new Error('إعدادات Supabase غير موجودة.');
+    setBusy(true);
+    try {
+      const provisionalId = `plant-${row.id}`;
+      const photoUrl = details.photoFile ? await uploadPhotoFile(details.photoFile, 'column_checks', provisionalId) : '';
+      const { data, error } = await supabase.rpc('supervisor_plant_planned_pole', {
+        p_id: row.id,
+        p_has_objection: details.hasObjection,
+        p_is_existing: details.isExisting,
+        p_notes: details.notes || null,
+        p_photo_url: photoUrl || null,
+      });
+      if (error) throw error;
+      setPlannedRows((currentRows) => currentRows.map((item) => item.id === row.id ? data.planned : item));
+      setRecords((currentRecords) => ({ ...currentRecords, column_checks: [data.record, ...currentRecords.column_checks] }));
       return data;
     } finally {
       setBusy(false);
@@ -1536,6 +1617,10 @@ function App() {
 
   if (profile.role === 'engineer') {
     return <EngineerWorkspace profile={profile} plannedRows={plannedRows} onRefresh={loadAll} onLogout={changeProfile} onValidate={validatePlannedPole} onAdd={addPlannedPole} busy={busy} />;
+  }
+
+  if (profile.role === 'supervisor') {
+    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} busy={busy} />;
   }
 
   return (
