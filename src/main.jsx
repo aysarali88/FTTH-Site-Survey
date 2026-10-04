@@ -34,6 +34,7 @@ const today = new Date().toISOString().slice(0, 10);
 const defaultLocation = { latitude: 32.8872, longitude: 13.1913 };
 const PROFILE_KEY = 'site-survey-profile';
 const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || '1234';
+const AUTH_EMAIL_DOMAIN = 'site-survey.local';
 const IMPORT_BATCH_SIZE = 500;
 const MAX_IMPORTED_RECORDS_TO_RENDER = 500;
 const MAX_MAP_MARKERS = 2000;
@@ -217,11 +218,26 @@ function readSavedProfile() {
   try {
     const saved = localStorage.getItem(PROFILE_KEY);
     const profile = saved ? JSON.parse(saved) : null;
+    if (profile?.username) return null;
     if (profile?.role === 'tech' && !profile.city) return null;
     return profile;
   } catch {
     return null;
   }
+}
+
+function internalAuthEmail(username) {
+  return `${username.trim().toLowerCase()}@${AUTH_EMAIL_DOMAIN}`;
+}
+
+function roleLabel(role) {
+  return {
+    admin: 'Admin',
+    tech: 'Technician',
+    design: 'Design',
+    engineer: 'Engineer',
+    supervisor: 'Supervisor',
+  }[role] || role;
 }
 
 function applyProfileToForm(form, profile) {
@@ -767,6 +783,7 @@ function App() {
   const [adminPage, setAdminPage] = useState('data');
 
   const isAdmin = profile?.role === 'admin';
+  const isStaffRole = ['design', 'engineer', 'supervisor'].includes(profile?.role);
   const current = resources[active];
   const form = forms[active];
 
@@ -776,6 +793,7 @@ function App() {
       filtered[type] = rows
         .map((row) => normalizeRow(row, type))
         .filter((row) => {
+          if (isStaffRole) return true;
           if (!isAdmin) return row.tech_name === profile?.techName && row.district === profile?.district;
           if (adminFilters.type !== 'all' && adminFilters.type !== type) return false;
           if (adminFilters.district && row.district !== adminFilters.district) return false;
@@ -785,7 +803,7 @@ function App() {
         });
     }
     return filtered;
-  }, [records, isAdmin, profile, adminFilters, query]);
+  }, [records, isAdmin, isStaffRole, profile, adminFilters, query]);
 
   const currentRows = scopedRecords[active] || [];
   const displayedRows = currentRows.slice(0, MAX_TABLE_ROWS);
@@ -839,18 +857,81 @@ function App() {
   }, [profile]);
 
   useEffect(() => {
+    let mounted = true;
+    if (!supabase) return undefined;
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!mounted || !data.session || profile) return;
+      const { data: account } = await supabase
+        .from('user_profiles')
+        .select('username, display_name, role, city, district, active')
+        .eq('id', data.session.user.id)
+        .single();
+      if (!mounted || !account?.active) return;
+      const nextProfile = {
+        username: account.username,
+        techName: account.display_name || account.username,
+        city: account.city || '',
+        district: account.district || '',
+        role: account.role,
+      };
+      setProfile(nextProfile);
+      setForms(makeEmptyForms(nextProfile));
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
     document.body.classList.toggle('map-fullscreen-active', mapExpanded);
     return () => document.body.classList.remove('map-fullscreen-active');
   }, [mapExpanded]);
 
-  function saveProfile(nextProfile) {
+  async function saveProfile(loginDetails) {
+    if (loginDetails.legacyAdmin) {
+      const nextProfile = { techName: loginDetails.username.trim() || 'Admin', district: 'ALL', role: 'admin' };
+      localStorage.setItem(PROFILE_KEY, JSON.stringify(nextProfile));
+      setProfile(nextProfile);
+      setForms(makeEmptyForms(nextProfile));
+      setMessage('تم الدخول كأدمن.');
+      return;
+    }
+
+    if (!hasSupabaseConfig || !supabase) throw new Error('إعدادات Supabase غير موجودة.');
+    const username = loginDetails.username.trim().toLowerCase();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: internalAuthEmail(username),
+      password: loginDetails.password,
+    });
+    if (error) throw error;
+
+    const { data: account, error: accountError } = await supabase
+      .from('user_profiles')
+      .select('username, display_name, role, city, district, active')
+      .eq('id', data.user.id)
+      .single();
+    if (accountError) {
+      await supabase.auth.signOut();
+      throw accountError;
+    }
+    if (!account.active) {
+      await supabase.auth.signOut();
+      throw new Error('هذا المستخدم غير مفعّل.');
+    }
+
+    const nextProfile = {
+      username: account.username,
+      techName: account.display_name || account.username,
+      city: account.city || '',
+      district: account.district || '',
+      role: account.role,
+    };
     localStorage.setItem(PROFILE_KEY, JSON.stringify(nextProfile));
     setProfile(nextProfile);
     setForms(makeEmptyForms(nextProfile));
-    setMessage(nextProfile.role === 'admin' ? 'تم الدخول كأدمن.' : `أهلاً ${nextProfile.techName}. تم تثبيت الاسم والمنطقة.`);
+    setMessage(`تم الدخول بصلاحية ${roleLabel(nextProfile.role)}.`);
   }
 
-  function changeProfile() {
+  async function changeProfile() {
+    if (supabase) await supabase.auth.signOut();
     localStorage.removeItem(PROFILE_KEY);
     setProfile(null);
     setMessage('');
@@ -1535,14 +1616,14 @@ function App() {
 }
 
 function LoginPage({ onSave }) {
-  const [techName, setTechName] = useState('');
-  const [city, setCity] = useState('');
-  const [district, setDistrict] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [adminMode, setAdminMode] = useState(false);
   const [adminPin, setAdminPin] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
     setError('');
     if (adminMode) {
@@ -1550,11 +1631,21 @@ function LoginPage({ onSave }) {
         setError('كود الأدمن غير صحيح.');
         return;
       }
-      onSave({ techName: techName.trim() || 'Admin', district: 'ALL', role: 'admin' });
+      await onSave({ username: username.trim() || 'Admin', legacyAdmin: true });
       return;
     }
-    if (!techName.trim() || !city || !district.trim()) return;
-    onSave({ techName: techName.trim(), city, district: district.trim(), role: 'tech' });
+    if (!username.trim() || !password) {
+      setError('أدخل اسم المستخدم وكلمة المرور.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await onSave({ username, password });
+    } catch (submitError) {
+      setError(submitError.message === 'Invalid login credentials' ? 'اسم المستخدم أو كلمة المرور غير صحيحة.' : `تعذر تسجيل الدخول: ${submitError.message}`);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -1564,8 +1655,8 @@ function LoginPage({ onSave }) {
           <UserRound size={30} />
         </div>
         <p className="eyebrow">Site Survey Pro</p>
-        <h1>{adminMode ? 'دخول الأدمن' : 'دخول الفني'}</h1>
-        <p className="loginText">الفني يرى سجلات منطقته فقط. الأدمن يرى كل البيانات ويصدر الإكسل.</p>
+        <h1>{adminMode ? 'دخول الأدمن' : 'تسجيل الدخول'}</h1>
+        <p className="loginText">استخدم اسم المستخدم وكلمة المرور الخاصة بك.</p>
 
         <label className="check adminSwitch">
           <input type="checkbox" checked={adminMode} onChange={(event) => setAdminMode(event.target.checked)} />
@@ -1573,23 +1664,13 @@ function LoginPage({ onSave }) {
         </label>
 
         <label>
-            اسم المستخدم
-          <input autoFocus value={techName} onChange={(event) => setTechName(event.target.value)} placeholder="مثال: أحمد علي" />
+          اسم المستخدم
+          <input autoFocus value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Username" autoComplete="username" />
         </label>
         {!adminMode && (
           <label>
-            City
-            <select value={city} onChange={(event) => setCity(event.target.value)}>
-              <option value="">Select city...</option>
-              <option value="Tripoli">Tripoli</option>
-              <option value="Misrata">Misrata</option>
-            </select>
-          </label>
-        )}
-        {!adminMode && (
-          <label>
-            المنطقة
-            <input value={district} onChange={(event) => setDistrict(event.target.value)} placeholder="مثال: حي الأندلس - المنطقة 2" />
+            كلمة المرور
+            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" autoComplete="current-password" />
           </label>
         )}
         {adminMode && (
@@ -1601,8 +1682,8 @@ function LoginPage({ onSave }) {
 
         {error && <div className="notice">{error}</div>}
 
-        <button className="save" type="submit" disabled={adminMode ? !adminPin.trim() : !techName.trim() || !city || !district.trim()}>
-          دخول التطبيق
+        <button className="save" type="submit" disabled={loading || (adminMode ? !adminPin.trim() : !username.trim() || !password)}>
+          {loading ? 'جارٍ الدخول...' : 'دخول التطبيق'}
         </button>
       </form>
     </main>

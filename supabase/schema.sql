@@ -1,5 +1,48 @@
 create extension if not exists "pgcrypto";
 
+create table if not exists public.user_profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  username text unique not null,
+  display_name text,
+  role text not null check (role in ('admin', 'tech', 'design', 'engineer', 'supervisor')),
+  city text,
+  district text,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.user_profiles enable row level security;
+
+drop policy if exists "users can read own profile" on public.user_profiles;
+create policy "users can read own profile" on public.user_profiles
+for select to authenticated using ((select auth.uid()) = id);
+
+create or replace function public.handle_new_user_profile()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+declare account_username text; account_role text;
+begin
+  account_username := split_part(new.email, '@', 1);
+  account_role := case account_username
+    when 'designer1' then 'design'
+    when 'engineer1' then 'engineer'
+    when 'supervisor1' then 'supervisor'
+    else 'tech'
+  end;
+  insert into public.user_profiles (id, username, display_name, role)
+  values (new.id, account_username, account_username, account_role)
+  on conflict (id) do update set username = excluded.username, display_name = excluded.display_name, role = excluded.role, updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_profile on auth.users;
+create trigger on_auth_user_created_profile after insert on auth.users
+for each row execute function public.handle_new_user_profile();
+
+grant select on public.user_profiles to authenticated;
+
 create table if not exists public.buildings (
   id text primary key,
   latitude double precision not null,
