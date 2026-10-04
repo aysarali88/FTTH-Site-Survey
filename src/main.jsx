@@ -1081,7 +1081,7 @@ function App() {
         created_by: profile.username || profile.techName,
         validation_status: 'pending',
       }));
-      const { error } = await supabase.from('planned_poles').upsert(rows, { onConflict: 'id' });
+      const { error } = await supabase.from('planned_poles').insert(rows);
       if (error) throw error;
       setPlannedRows((currentRows) => [...rows, ...currentRows]);
       setMessage(`تم رفع ${rows.length} نقطة من ${metadata.fileName}.`);
