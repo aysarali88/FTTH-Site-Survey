@@ -889,7 +889,7 @@ function EngineerMap({ rows, selectedId, onSelect, onMapClick }) {
     <MapContainer center={center} zoom={14} maxZoom={22} scrollWheelZoom className="map" zoomControl>
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' maxZoom={22} maxNativeZoom={19} url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       {rows.map((row) => {
-        const statusColor = row.validation_status === 'validated' ? '#16a34a' : row.validation_status === 'rejected' ? '#dc2626' : '#f59e0b';
+        const statusColor = row.validation_status === 'validated' ? '#16a34a' : row.validation_status === 'planted' ? '#2563eb' : row.validation_status === 'rejected' ? '#dc2626' : '#f59e0b';
         return <CircleMarker key={row.id} center={[Number(row.latitude), Number(row.longitude)]} radius={row.id === selectedId ? 11 : 7} pathOptions={{ color: statusColor, fillColor: statusColor, fillOpacity: 0.85, weight: row.id === selectedId ? 4 : 2 }} eventHandlers={{ click: () => onSelect(row.id) }} />;
       })}
     </MapContainer>
@@ -998,6 +998,8 @@ function SupervisorWorkspace({ profile, plannedRows, onRefresh, onLogout, onPlan
       <header className="topbar"><div><p className="eyebrow">Site Survey Pro</p><h1>Supervisor Planting</h1></div><div className="actions"><div className="profilePill"><UserRound size={17} /><span>{profile.techName}</span><strong>Supervisor</strong></div><button className="ghost" type="button" onClick={onLogout}><LogOut size={18} /> Logout</button><button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={18} /> Refresh</button></div></header>
       <section className="stats"><article><CheckCircle2 size={19} /><span>Validated points</span><strong>{available.filter((row) => row.validation_status === 'validated').length}</strong></article><article><MapPin size={19} /><span>Planted</span><strong>{available.filter((row) => row.validation_status === 'planted').length}</strong></article><article><Camera size={19} /><span>Photos</span><strong>{available.filter((row) => row.is_planted && row.photo_url).length}</strong></article></section>
       {message && <div className="notice">{message}</div>}
+      <section className="workspace">
+      <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} selectedId={selectedId} onSelect={setSelectedId} onMapClick={() => {}} /><div className="limitBadge">الأخضر: معتمد · الأزرق: تمت زراعته</div></div>
       <section className="records" style={{ padding: 20 }}>
         <div className="recordsHeader"><div><h2>Validated planting points</h2><span>Only engineer-approved points are shown.</span></div></div>
         <label style={{ marginTop: 14 }}>Point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{available.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} - {row.validation_status}</option>)}</select></label>
@@ -1009,6 +1011,7 @@ function SupervisorWorkspace({ profile, plannedRows, onRefresh, onLogout, onPlan
           <button className="save" type="button" onClick={submit} disabled={busy || selected.validation_status === 'planted'}>{selected.validation_status === 'planted' ? 'تمت الزراعة' : (busy ? 'جارٍ الحفظ...' : 'تسجيل الزراعة')}</button>
         </>}
         {!available.length && <div className="empty" style={{ marginTop: 20 }}>لا توجد نقاط معتمدة من المهندس حتى الآن.</div>}
+      </section>
       </section>
       <section className="records" style={{ marginTop: 16 }}><div className="recordsHeader"><h2>Point list</h2><span>{available.length} points</span></div><div className="tableWrap"><table><thead><tr><th>ID</th><th>City</th><th>District</th><th>Status</th></tr></thead><tbody>{available.slice(0, 500).map((row) => <tr key={row.id} onClick={() => setSelectedId(row.id)}><td>{row.id}</td><td>{row.city || '-'}</td><td>{row.district || '-'}</td><td>{row.validation_status}</td></tr>)}</tbody></table></div></section>
     </main>
