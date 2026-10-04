@@ -870,6 +870,92 @@ function DesignWorkspace({ profile, plannedRows, plantingRows, onUpload, onRefre
   );
 }
 
+function EngineerMap({ rows, selectedId, onSelect, onMapClick }) {
+  const first = rows.find((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)));
+  const center = first ? [Number(first.latitude), Number(first.longitude)] : [defaultLocation.latitude, defaultLocation.longitude];
+  useMapEvents({ click: (event) => onMapClick(event.latlng) });
+  return (
+    <MapContainer center={center} zoom={14} maxZoom={22} scrollWheelZoom className="map" zoomControl>
+      <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' maxZoom={22} maxNativeZoom={19} url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      {rows.map((row) => {
+        const statusColor = row.validation_status === 'validated' ? '#16a34a' : row.validation_status === 'rejected' ? '#dc2626' : '#f59e0b';
+        return <CircleMarker key={row.id} center={[Number(row.latitude), Number(row.longitude)]} radius={row.id === selectedId ? 11 : 7} pathOptions={{ color: statusColor, fillColor: statusColor, fillOpacity: 0.85, weight: row.id === selectedId ? 4 : 2 }} eventHandlers={{ click: () => onSelect(row.id) }} />;
+      })}
+    </MapContainer>
+  );
+}
+
+function EngineerWorkspace({ profile, plannedRows, onRefresh, onLogout, onValidate, onAdd, busy }) {
+  const [selectedId, setSelectedId] = useState(plannedRows[0]?.id || '');
+  const [status, setStatus] = useState('validated');
+  const [notes, setNotes] = useState('');
+  const [city, setCity] = useState(profile.city || 'Misrata');
+  const [district, setDistrict] = useState(profile.district || '');
+  const [addMode, setAddMode] = useState(false);
+  const [message, setMessage] = useState('');
+  const selected = plannedRows.find((row) => row.id === selectedId) || null;
+
+  useEffect(() => {
+    if (!selected && plannedRows[0]) setSelectedId(plannedRows[0].id);
+  }, [plannedRows, selected]);
+
+  useEffect(() => {
+    setStatus(selected?.validation_status === 'rejected' ? 'rejected' : 'validated');
+    setNotes(selected?.validation_notes || '');
+  }, [selectedId, selected?.validation_status, selected?.validation_notes]);
+
+  async function saveSelected() {
+    if (!selected) return;
+    setMessage('');
+    try {
+      await onValidate(selected, { status, notes });
+      setMessage('تم حفظ قرار الـ Validation.');
+    } catch (error) {
+      setMessage(`تعذر الحفظ: ${error.message}`);
+    }
+  }
+
+  async function handleMapClick(latlng) {
+    if (addMode) {
+      try {
+        const created = await onAdd({ latitude: latlng.lat, longitude: latlng.lng, city, district });
+        setSelectedId(created.id);
+        setAddMode(false);
+        setMessage('تمت إضافة نقطة جديدة بحالة Pending.');
+      } catch (error) {
+        setMessage(`تعذر إضافة النقطة: ${error.message}`);
+      }
+      return;
+    }
+    if (!selected) return;
+    try {
+      await onValidate(selected, { status, notes, latitude: latlng.lat, longitude: latlng.lng });
+      setMessage('تم تحديث موقع النقطة وحفظه.');
+    } catch (error) {
+      setMessage(`تعذر تحريك النقطة: ${error.message}`);
+    }
+  }
+
+  const pending = plannedRows.filter((row) => row.validation_status === 'pending');
+  return (
+    <main className="app adminMode">
+      <header className="topbar"><div><p className="eyebrow">Site Survey Pro</p><h1>Engineer Validation</h1></div><div className="actions"><div className="profilePill"><UserRound size={17} /><span>{profile.techName}</span><strong>Engineer</strong></div><button className="ghost" type="button" onClick={onLogout}><LogOut size={18} /> Logout</button><button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={18} /> Refresh</button></div></header>
+      <section className="stats"><article><Target size={19} /><span>Pending</span><strong>{pending.length}</strong></article><article><CheckCircle2 size={19} /><span>Validated</span><strong>{plannedRows.filter((row) => row.validation_status === 'validated').length}</strong></article><article><X size={19} /><span>Rejected</span><strong>{plannedRows.filter((row) => row.validation_status === 'rejected').length}</strong></article></section>
+      {message && <div className="notice">{message}</div>}
+      <section className="workspace">
+        <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} selectedId={selectedId} onSelect={setSelectedId} onMapClick={handleMapClick} /><div className="limitBadge">{addMode ? 'اضغط على الخريطة لإضافة نقطة' : 'اضغط على نقطة ثم اضغط على الخريطة لتحريكها'}</div></div>
+        <section className="panel open" style={{ position: 'relative' }}>
+          <div className="panelHeader"><div><p>Engineer review</p><h2>Validation queue</h2><span className="autoId">{plannedRows.length} planned points</span></div><Target color="#2563eb" /></div>
+          <div className="fieldGrid"><label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label><label>District<input value={district} onChange={(event) => setDistrict(event.target.value)} /></label></div>
+          <label style={{ marginTop: 14 }}>Point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{plannedRows.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} - {row.validation_status}</option>)}</select></label>
+          {selected && <><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label><label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy}>Save decision</button></>}
+          <button className="ghost" type="button" style={{ width: '100%', marginTop: 12 }} onClick={() => setAddMode((value) => !value)}>{addMode ? 'Cancel add point' : 'Add point on map'}</button>
+        </section>
+      </section>
+    </main>
+  );
+}
+
 function App() {
   const [profile, setProfile] = useState(readSavedProfile);
   const [active, setActive] = useState('buildings');
@@ -1085,6 +1171,44 @@ function App() {
       if (error) throw error;
       setPlannedRows((currentRows) => [...rows, ...currentRows]);
       setMessage(`تم رفع ${rows.length} نقطة من ${metadata.fileName}.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function validatePlannedPole(row, changes) {
+    if (!supabase) throw new Error('إعدادات Supabase غير موجودة.');
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.rpc('engineer_update_planned_pole', {
+        p_id: row.id,
+        p_latitude: changes.latitude ?? row.latitude,
+        p_longitude: changes.longitude ?? row.longitude,
+        p_status: changes.status,
+        p_notes: changes.notes || null,
+      });
+      if (error) throw error;
+      setPlannedRows((currentRows) => currentRows.map((item) => item.id === row.id ? data : item));
+      return data;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addPlannedPole(point) {
+    if (!supabase) throw new Error('إعدادات Supabase غير موجودة.');
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.rpc('engineer_add_planned_pole', {
+        p_latitude: point.latitude,
+        p_longitude: point.longitude,
+        p_city: point.city,
+        p_district: point.district || null,
+        p_name: null,
+      });
+      if (error) throw error;
+      setPlannedRows((currentRows) => [data, ...currentRows]);
+      return data;
     } finally {
       setBusy(false);
     }
@@ -1408,6 +1532,10 @@ function App() {
 
   if (profile.role === 'design') {
     return <DesignWorkspace profile={profile} plannedRows={plannedRows} plantingRows={records.column_checks} onUpload={uploadPlannedPoints} onRefresh={loadAll} onLogout={changeProfile} busy={busy} />;
+  }
+
+  if (profile.role === 'engineer') {
+    return <EngineerWorkspace profile={profile} plannedRows={plannedRows} onRefresh={loadAll} onLogout={changeProfile} onValidate={validatePlannedPole} onAdd={addPlannedPole} busy={busy} />;
   }
 
   return (

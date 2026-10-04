@@ -84,18 +84,6 @@ drop policy if exists "design insert planned poles" on public.planned_poles;
 create policy "design insert planned poles" on public.planned_poles
 for insert to authenticated with check (public.current_app_role() in ('admin', 'design'));
 
-drop policy if exists "engineer validate planned poles" on public.planned_poles;
-create policy "engineer validate planned poles" on public.planned_poles
-for update to authenticated
-using (public.current_app_role() in ('admin', 'engineer'))
-with check (public.current_app_role() in ('admin', 'engineer'));
-
-drop policy if exists "supervisor plant planned poles" on public.planned_poles;
-create policy "supervisor plant planned poles" on public.planned_poles
-for update to authenticated
-using (public.current_app_role() in ('admin', 'supervisor'))
-with check (public.current_app_role() in ('admin', 'supervisor'));
-
 drop policy if exists "design delete planned poles" on public.planned_poles;
 create policy "design delete planned poles" on public.planned_poles
 for delete to authenticated using (public.current_app_role() in ('admin', 'design'));
@@ -106,6 +94,49 @@ before update on public.planned_poles
 for each row execute function public.set_updated_at();
 
 grant select, insert, update, delete on public.planned_poles to authenticated;
+
+create or replace function public.engineer_update_planned_pole(
+  p_id text, p_latitude double precision, p_longitude double precision,
+  p_status text, p_notes text default null
+)
+returns public.planned_poles language plpgsql security definer set search_path = public
+as $$
+declare result_row public.planned_poles; actor text;
+begin
+  if public.current_app_role() not in ('admin', 'engineer') then raise exception 'Not authorized'; end if;
+  if p_status not in ('validated', 'rejected') then raise exception 'Invalid validation status'; end if;
+  select username into actor from public.user_profiles where id = (select auth.uid());
+  update public.planned_poles set latitude = p_latitude, longitude = p_longitude,
+    validation_status = p_status, validation_notes = nullif(trim(coalesce(p_notes, '')), ''),
+    validated_by = actor, validated_at = now(), updated_at = now()
+  where id = p_id returning * into result_row;
+  if result_row.id is null then raise exception 'Planned pole not found'; end if;
+  return result_row;
+end;
+$$;
+
+create or replace function public.engineer_add_planned_pole(
+  p_latitude double precision, p_longitude double precision, p_city text,
+  p_district text default null, p_name text default null
+)
+returns public.planned_poles language plpgsql security definer set search_path = public
+as $$
+declare result_row public.planned_poles; actor text; new_id text;
+begin
+  if public.current_app_role() not in ('admin', 'engineer') then raise exception 'Not authorized'; end if;
+  select username into actor from public.user_profiles where id = (select auth.uid());
+  new_id := 'PLAN-' || to_char(clock_timestamp(), 'YYYYMMDDHH24MISSMS') || '-' || upper(substr(md5(random()::text), 1, 6));
+  insert into public.planned_poles (id, latitude, longitude, city, district, point_name, validation_status, created_by)
+  values (new_id, p_latitude, p_longitude, p_city, nullif(trim(coalesce(p_district, '')), ''), nullif(trim(coalesce(p_name, '')), ''), 'pending', actor)
+  returning * into result_row;
+  return result_row;
+end;
+$$;
+
+revoke all on function public.engineer_update_planned_pole(text, double precision, double precision, text, text) from public;
+grant execute on function public.engineer_update_planned_pole(text, double precision, double precision, text, text) to authenticated;
+revoke all on function public.engineer_add_planned_pole(double precision, double precision, text, text, text) from public;
+grant execute on function public.engineer_add_planned_pole(double precision, double precision, text, text, text) to authenticated;
 
 create table if not exists public.buildings (
   id text primary key,
