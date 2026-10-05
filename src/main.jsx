@@ -1756,7 +1756,7 @@ function App() {
       <header className="topbar">
         <div>
           <p className="eyebrow">Site Survey Pro</p>
-          <h1>{isAdmin ? 'Admin Dashboard' : 'خريطة الرفع الميداني'}</h1>
+          <h1>{isAdmin ? 'Dashboard' : 'خريطة الرفع الميداني'}</h1>
         </div>
         <div className="actions">
           <div className="profilePill" title="بيانات المستخدم الحالية">
