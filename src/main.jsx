@@ -333,6 +333,14 @@ function districtKey(value) {
   return cleanDistrictName(value).toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 }
 
+function districtAlias(value, city) {
+  const key = districtKey(value);
+  if (districtKey(city) === 'طرابلس' || districtKey(city) === 'tripoli') {
+    if (key === 'حيالاندلسم١' || key === 'حيالاندلس1') return 'حي الاندلس 1';
+  }
+  return cleanDistrictName(value);
+}
+
 function similarityScore(left, right) {
   if (!left || !right) return 0;
   if (left === right) return 1;
@@ -354,7 +362,7 @@ function similarityScore(left, right) {
 function canonicalizeDistricts(recordGroups) {
   const groups = new Map();
   Object.values(recordGroups).flat().forEach((row) => {
-    const raw = cleanDistrictName(row.district);
+    const raw = districtAlias(row.district, inferCity(row));
     if (!raw) return;
     const city = inferCity(row);
     const groupKey = `${districtKey(city)}|${districtKey(raw)}`;
@@ -385,7 +393,7 @@ function canonicalizeDistricts(recordGroups) {
       const cityKey = districtKey(inferCity(row));
       const rawKey = districtKey(row.district);
       const candidates = canonicalByCity.get(cityKey) || [];
-      const canonical = candidates.find((candidate) => rawKey === districtKey(candidate) || (Math.min(rawKey.length, districtKey(candidate)) >= 6 && similarityScore(rawKey, districtKey(candidate)) >= 0.9)) || cleanDistrictName(row.district);
+      const canonical = candidates.find((candidate) => rawKey === districtKey(candidate) || (Math.min(rawKey.length, districtKey(candidate)) >= 6 && similarityScore(rawKey, districtKey(candidate)) >= 0.9)) || districtAlias(row.district, inferCity(row));
       if (canonical !== row.district) changes.push({ type, id: row.id, district: canonical });
       return canonical === row.district ? row : { ...row, district: canonical };
     });
@@ -394,7 +402,7 @@ function canonicalizeDistricts(recordGroups) {
 }
 
 function resolveDistrict(value, city, recordGroups) {
-  const cleaned = cleanDistrictName(value);
+  const cleaned = districtAlias(value, city);
   if (!cleaned) return '';
   const candidates = Object.values(recordGroups).flat()
     .filter((row) => districtKey(inferCity(row)) === districtKey(city) && row.district)
