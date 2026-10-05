@@ -6,6 +6,223 @@
   text-rendering: optimizeLegibility;
 }
 
+/* Executive console visual layer: keeps the existing data and map components intact. */
+:root {
+  --console-ink: #0b2a49;
+  --console-muted: #6f8194;
+  --console-gold: #b9873c;
+  --console-paper: #fbf7ef;
+  --console-line: #ded5c6;
+}
+
+body {
+  background: var(--console-paper);
+  color: var(--console-ink);
+}
+
+.app {
+  max-width: 1320px;
+  padding: 24px 30px 48px;
+}
+
+.adminMode .topbar {
+  border-bottom: 1px solid var(--console-line);
+  margin-bottom: 0;
+  padding: 10px 0 22px;
+}
+
+.adminMode h1,
+.adminMode h2,
+.adminMode h3,
+.dashboardHero h2 {
+  color: var(--console-ink);
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: 0.01em;
+}
+
+.adminMode .eyebrow,
+.dashboardEyebrow {
+  color: var(--console-gold) !important;
+  letter-spacing: 0.24em;
+}
+
+.adminMode .profilePill,
+.adminMode .ghost,
+.adminMode .adminPages button,
+.adminMode .dashboardRefresh {
+  background: transparent;
+  border: 1px solid var(--console-line);
+  color: var(--console-ink);
+}
+
+.adminMode .profilePill strong {
+  color: var(--console-gold);
+}
+
+.adminMode .adminPages button.active {
+  background: var(--console-ink);
+  border-color: var(--console-ink);
+}
+
+.adminMode .dashboardMode,
+.dashboardMode {
+  background: var(--console-paper);
+}
+
+.dashboardMode .plantingDashboard {
+  gap: 22px;
+  margin-top: 0;
+}
+
+.dashboardMode .dashboardHero {
+  align-items: end;
+  background: transparent;
+  border-bottom: 1px solid var(--console-line);
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--console-ink);
+  min-height: 210px;
+  padding: 42px 0 28px;
+}
+
+.dashboardMode .dashboardHero::after {
+  display: none;
+}
+
+.dashboardMode .dashboardHero h2 {
+  font-size: clamp(38px, 5vw, 58px);
+  font-weight: 500;
+  margin: 8px 0 14px;
+}
+
+.dashboardMode .dashboardHero p:not(.dashboardEyebrow) {
+  color: #48627b;
+  line-height: 1.7;
+  max-width: 620px;
+}
+
+.dashboardMode .dashboardLive {
+  background: #e9eee7;
+  border: 1px solid #c6d0c4;
+  color: #2f5948;
+}
+
+.dashboardMode .dashboardRefresh {
+  background: var(--console-paper);
+}
+
+.dashboardMode .dashboardFilters,
+.dashboardMode .dashboardKpi,
+.dashboardMode .dashboardPanel {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--console-line);
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+.dashboardMode .dashboardFilters {
+  grid-template-columns: minmax(150px, 0.8fr) repeat(4, minmax(140px, 1fr));
+  padding: 16px;
+}
+
+.dashboardMode .dashboardFilters select,
+.dashboardMode .dashboardFilters input {
+  background: #fffdf9;
+  border-color: var(--console-line);
+  border-radius: 2px;
+  color: var(--console-ink);
+}
+
+.dashboardMode .dashboardFilterTitle,
+.dashboardMode .dashboardPanelHead h3 {
+  color: var(--console-ink);
+}
+
+.dashboardMode .dashboardKpis {
+  gap: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dashboardMode .dashboardKpi {
+  border-right: 0;
+  min-height: 154px;
+  padding: 24px 26px;
+}
+
+.dashboardMode .dashboardKpi:first-child {
+  border-radius: 2px 0 0 2px;
+}
+
+.dashboardMode .dashboardKpi:last-child {
+  border-right: 1px solid var(--console-line);
+  border-radius: 0 2px 2px 0;
+}
+
+.dashboardMode .dashboardKpi::before {
+  background: var(--console-gold);
+  bottom: 0;
+  height: 3px;
+  left: 26px;
+  top: auto;
+  width: 48px;
+}
+
+.dashboardMode .dashboardKpi span,
+.dashboardMode .dashboardKpi small,
+.dashboardMode .dashboardPanelHead span {
+  color: var(--console-muted);
+}
+
+.dashboardMode .dashboardKpi strong {
+  color: var(--console-ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 42px;
+  font-weight: 500;
+}
+
+.dashboardMode .dashboardPanel {
+  padding: 22px;
+}
+
+.dashboardMode .dashboardMapWrap {
+  border-radius: 2px;
+  height: 470px;
+}
+
+.dashboardMode .dashboardPanelHead {
+  border-bottom: 1px solid #eee7dc;
+  padding-bottom: 14px;
+}
+
+.dashboardMode .dashboardRecentTable th,
+.dashboardMode .dashboardMiniTable th {
+  background: #f2eee6;
+  color: #546b80;
+}
+
+.dashboardMode .dashboardRecentTable td,
+.dashboardMode .dashboardMiniTable td {
+  border-bottom-color: #ebe4d9;
+}
+
+@media (max-width: 980px) {
+  .app {
+    padding: 18px;
+  }
+
+  .dashboardMode .dashboardKpis {
+    gap: 10px;
+    grid-template-columns: 1fr;
+  }
+
+  .dashboardMode .dashboardKpi,
+  .dashboardMode .dashboardKpi:last-child,
+  .dashboardMode .dashboardKpi:first-child {
+    border: 1px solid var(--console-line);
+    border-radius: 2px;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
