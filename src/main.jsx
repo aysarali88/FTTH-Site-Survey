@@ -836,10 +836,12 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
   const dailyTotals = useMemo(() => {
     const groups = new Map();
     filteredRows.forEach((row) => {
-      const key = row.record_iso_date || 'unknown';
-      groups.set(key, (groups.get(key) || 0) + 1);
+      const key = `${row.city || 'Other'}|||${row.record_iso_date || 'unknown'}`;
+      const current = groups.get(key) || { city: row.city || 'Other', date: row.record_iso_date || 'unknown', total: 0 };
+      current.total += 1;
+      groups.set(key, current);
     });
-    return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+    return [...groups.values()].sort((a, b) => b.date.localeCompare(a.date) || a.city.localeCompare(b.city));
   }, [filteredRows]);
 
   function updateFilter(key, value) {
@@ -915,7 +917,7 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
 
       <article className="dashboardPanel dashboardRecentPanel">
         <div className="dashboardPanelHead"><div><h3>Planting by date</h3><span>Daily totals for the selected filters</span></div><ClipboardList size={20} /></div>
-        <div className="dashboardMiniTableWrap"><table className="dashboardMiniTable"><thead><tr><th>Date</th><th>Total planting records</th></tr></thead><tbody>{dailyTotals.map(([date, count]) => <tr key={date}><td>{date === 'unknown' ? '-' : formatDate(date)}</td><td className="successText">{count}</td></tr>)}{!dailyTotals.length && <tr><td colSpan="2" className="dashboardEmptyCell">No date data.</td></tr>}</tbody></table></div>
+        <div className="dashboardMiniTableWrap"><table className="dashboardMiniTable"><thead><tr><th>City</th><th>Date</th><th>Total planting records</th></tr></thead><tbody>{dailyTotals.map((item) => <tr key={`${item.city}-${item.date}`}><td>{item.city}</td><td>{item.date === 'unknown' ? '-' : formatDate(item.date)}</td><td className="successText">{item.total}</td></tr>)}{!dailyTotals.length && <tr><td colSpan="3" className="dashboardEmptyCell">No date data.</td></tr>}</tbody></table></div>
       </article>
 
       <article className="dashboardPanel dashboardRecentPanel">
