@@ -338,6 +338,7 @@ function districtAlias(value, city) {
   if (districtKey(city) === 'طرابلس' || districtKey(city) === 'tripoli') {
     if (key === 'حيالاندلسم١' || key === 'حيالاندلس1') return 'حي الاندلس 1';
   }
+  if (key === 'ولادابعيو') return 'ولاد بعيو';
   return cleanDistrictName(value);
 }
 
