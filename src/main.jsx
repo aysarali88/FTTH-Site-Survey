@@ -315,6 +315,97 @@ function normalizeRow(row, type) {
   };
 }
 
+function cleanDistrictName(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/ؤ/g, 'و')
+    .replace(/ئ/g, 'ي')
+    .replace(/ـ/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function districtKey(value) {
+  return cleanDistrictName(value).toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+}
+
+function similarityScore(left, right) {
+  if (!left || !right) return 0;
+  if (left === right) return 1;
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= left.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= right.length; column += 1) {
+      current[column] = Math.min(
+        current[column - 1] + 1,
+        previous[column] + 1,
+        previous[column - 1] + (left[row - 1] === right[column - 1] ? 0 : 1),
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+  return 1 - previous[right.length] / Math.max(left.length, right.length);
+}
+
+function canonicalizeDistricts(recordGroups) {
+  const groups = new Map();
+  Object.values(recordGroups).flat().forEach((row) => {
+    const raw = cleanDistrictName(row.district);
+    if (!raw) return;
+    const city = inferCity(row);
+    const groupKey = `${districtKey(city)}|${districtKey(raw)}`;
+    const current = groups.get(groupKey) || { city, raw, count: 0 };
+    current.count += 1;
+    groups.set(groupKey, current);
+  });
+
+  const canonicalByCity = new Map();
+  [...groups.values()].sort((a, b) => b.count - a.count).forEach((item) => {
+    const cityKey = districtKey(item.city);
+    const candidates = canonicalByCity.get(cityKey) || [];
+    const key = districtKey(item.raw);
+    const match = candidates.find((candidate) => key === districtKey(candidate) || (Math.min(key.length, districtKey(candidate)) >= 6 && similarityScore(key, districtKey(candidate)) >= 0.9));
+    if (match) item.canonical = match;
+    else {
+      item.canonical = item.raw;
+      candidates.push(item.canonical);
+      canonicalByCity.set(cityKey, candidates);
+    }
+  });
+
+  const normalized = {};
+  const changes = [];
+  Object.entries(recordGroups).forEach(([type, rows]) => {
+    normalized[type] = rows.map((row) => {
+      if (!row.district) return row;
+      const cityKey = districtKey(inferCity(row));
+      const rawKey = districtKey(row.district);
+      const candidates = canonicalByCity.get(cityKey) || [];
+      const canonical = candidates.find((candidate) => rawKey === districtKey(candidate) || (Math.min(rawKey.length, districtKey(candidate)) >= 6 && similarityScore(rawKey, districtKey(candidate)) >= 0.9)) || cleanDistrictName(row.district);
+      if (canonical !== row.district) changes.push({ type, id: row.id, district: canonical });
+      return canonical === row.district ? row : { ...row, district: canonical };
+    });
+  });
+  return { normalized, changes };
+}
+
+function resolveDistrict(value, city, recordGroups) {
+  const cleaned = cleanDistrictName(value);
+  if (!cleaned) return '';
+  const candidates = Object.values(recordGroups).flat()
+    .filter((row) => districtKey(inferCity(row)) === districtKey(city) && row.district)
+    .map((row) => row.district);
+  const unique = [...new Set(candidates)];
+  const key = districtKey(cleaned);
+  return unique.find((candidate) => districtKey(candidate) === key)
+    || unique.find((candidate) => Math.min(key.length, districtKey(candidate)) >= 6 && similarityScore(key, districtKey(candidate)) >= 0.9)
+    || cleaned;
+}
+
 function inferCity(row) {
   const source = `${row.city || ''} ${row.district || ''}`.toLowerCase();
   if (source.includes('مصراتة') || source.includes('مصراته') || source.includes('misrata')) return 'Misrata';
@@ -1208,7 +1299,12 @@ function App() {
         .order('created_at', { ascending: false })
         .limit(5000);
       if (plannedError && plannedError.code !== '42P01') throw plannedError;
-      setRecords(nextRecords);
+      const districtResult = canonicalizeDistricts(nextRecords);
+      for (const change of districtResult.changes) {
+        const { error: districtError } = await supabase.from(resources[change.type].table).update({ district: change.district }).eq('id', change.id);
+        if (districtError) throw districtError;
+      }
+      setRecords(districtResult.normalized);
       setPlannedRows(planned || []);
       setMessage('تم تحديث البيانات بنجاح.');
     } catch (error) {
@@ -1225,7 +1321,7 @@ function App() {
       const rows = points.map((point) => ({
         ...point,
         city: metadata.city,
-        district: metadata.district || null,
+        district: resolveDistrict(metadata.district, metadata.city, records) || null,
         created_by: profile.username || profile.techName,
         validation_status: 'pending',
       }));
@@ -1265,7 +1361,7 @@ function App() {
         p_latitude: point.latitude,
         p_longitude: point.longitude,
         p_city: point.city,
-        p_district: point.district || null,
+        p_district: resolveDistrict(point.district, point.city, records) || null,
         p_name: null,
       });
       if (error) throw error;
@@ -1365,7 +1461,7 @@ function App() {
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
       const importData = finalizeImportRows(buildRowsFromWorkbook(workbook));
-      const parsedRows = importData.rows;
+      const parsedRows = canonicalizeDistricts(importData.rows).normalized;
       const totalRows = Object.values(parsedRows).reduce((sum, rows) => sum + rows.length, 0);
       if (!totalRows) throw new Error('لم يتم العثور على نقاط صالحة. تأكد من وجود Latitude و Longitude واسم الشيت الصحيح.');
 
@@ -1408,6 +1504,7 @@ function App() {
         id: recordId,
         latitude: Number(form.latitude),
         longitude: Number(form.longitude),
+        district: resolveDistrict(form.district, form.city, records),
         survey_date: today,
         photo_url: photoUrl,
       };
