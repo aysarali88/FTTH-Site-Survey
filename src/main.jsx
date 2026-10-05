@@ -782,10 +782,10 @@ function FastSurveyMarkers({ groupedRecords, onDelete, canDelete }) {
 }
 
 function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
-  const [filters, setFilters] = useState({ city: '', district: '', tech: '', status: 'all' });
+  const [filters, setFilters] = useState({ city: '', district: '', tech: '', status: 'all', fromDate: '', toDate: '' });
 
   const sourceRows = useMemo(
-    () => (records || []).map((row) => ({ ...normalizeRow(row, 'column_checks'), city: inferCity(row) })),
+    () => (records || []).map((row) => ({ ...normalizeRow(row, 'column_checks'), city: inferCity(row), record_iso_date: (row.created_at || row.survey_date || '').slice(0, 10) })),
     [records],
   );
 
@@ -800,6 +800,8 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
     if (filters.city && row.city !== filters.city) return false;
     if (filters.district && row.district !== filters.district) return false;
     if (filters.tech && row.tech_name !== filters.tech) return false;
+    if (filters.fromDate && row.record_iso_date < filters.fromDate) return false;
+    if (filters.toDate && row.record_iso_date > filters.toDate) return false;
     if (filters.status === 'planted' && !yesNoToBoolean(row.is_planted)) return false;
     if (filters.status === 'not_planted' && yesNoToBoolean(row.is_planted)) return false;
     if (filters.status === 'objection' && !yesNoToBoolean(row.has_objection)) return false;
@@ -831,6 +833,14 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
   const mapCenter = centerRow ? [Number(centerRow.latitude), Number(centerRow.longitude)] : [defaultLocation.latitude, defaultLocation.longitude];
   const maxTechnicianCount = Math.max(technicians[0]?.[1] || 1, 1);
   const maxCityCount = Math.max(cities[0]?.[1] || 1, 1);
+  const dailyTotals = useMemo(() => {
+    const groups = new Map();
+    filteredRows.forEach((row) => {
+      const key = row.record_iso_date || 'unknown';
+      groups.set(key, (groups.get(key) || 0) + 1);
+    });
+    return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  }, [filteredRows]);
 
   function updateFilter(key, value) {
     setFilters((previous) => ({ ...previous, [key]: value, ...(key === 'city' ? { district: '' } : {}) }));
@@ -859,6 +869,8 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
         <label>District<select value={filters.district} onChange={(event) => updateFilter('district', event.target.value)}><option value="">All districts</option>{districtOptions.map((district) => <option key={district} value={district}>{district}</option>)}</select></label>
         <label>Technician<select value={filters.tech} onChange={(event) => updateFilter('tech', event.target.value)}><option value="">All technicians</option>{techOptions.map((tech) => <option key={tech} value={tech}>{tech}</option>)}</select></label>
         <label>Status<select value={filters.status} onChange={(event) => updateFilter('status', event.target.value)}><option value="all">All statuses</option><option value="planted">Planted</option><option value="not_planted">Not planted</option><option value="objection">With objection</option></select></label>
+        <label>From date<input type="date" value={filters.fromDate} onChange={(event) => updateFilter('fromDate', event.target.value)} /></label>
+        <label>To date<input type="date" value={filters.toDate} onChange={(event) => updateFilter('toDate', event.target.value)} /></label>
       </div>
 
       <div className="dashboardKpis">
@@ -900,6 +912,11 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
           <div className="dashboardMiniTableWrap"><table className="dashboardMiniTable"><thead><tr><th>City</th><th>District</th><th>Total</th><th>Planted</th><th>Objections</th></tr></thead><tbody>{districts.slice(0, 12).map((item) => <tr key={`${item.city}-${item.district}`}><td>{item.city}</td><td>{item.district}</td><td>{item.total}</td><td className="successText">{item.planted}</td><td className="dangerText">{item.objections}</td></tr>)}{!districts.length && <tr><td colSpan="5" className="dashboardEmptyCell">No district data.</td></tr>}</tbody></table></div>
         </article>
       </div>
+
+      <article className="dashboardPanel dashboardRecentPanel">
+        <div className="dashboardPanelHead"><div><h3>Planting by date</h3><span>Daily totals for the selected filters</span></div><ClipboardList size={20} /></div>
+        <div className="dashboardMiniTableWrap"><table className="dashboardMiniTable"><thead><tr><th>Date</th><th>Total planting records</th></tr></thead><tbody>{dailyTotals.map(([date, count]) => <tr key={date}><td>{date === 'unknown' ? '-' : formatDate(date)}</td><td className="successText">{count}</td></tr>)}{!dailyTotals.length && <tr><td colSpan="2" className="dashboardEmptyCell">No date data.</td></tr>}</tbody></table></div>
+      </article>
 
       <article className="dashboardPanel dashboardRecentPanel">
         <div className="dashboardPanelHead"><div><h3>Recent pole planting records</h3><span>Latest points matching the current filters</span></div><span className="dashboardResultCount">{filteredRows.length} records</span></div>
