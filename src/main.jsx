@@ -1153,7 +1153,7 @@ function App() {
   const [adminPage, setAdminPage] = useState('data');
 
   const isAdmin = profile?.role === 'admin';
-  const isStaffRole = ['design', 'engineer', 'supervisor'].includes(profile?.role);
+  const isStaffRole = profile?.role === 'design';
   const current = resources[active];
   const form = forms[active];
 
@@ -1741,14 +1741,6 @@ function App() {
 
   if (profile.role === 'design') {
     return <DesignWorkspace profile={profile} plannedRows={plannedRows} plantingRows={records.column_checks} onUpload={uploadPlannedPoints} onRefresh={loadAll} onLogout={changeProfile} busy={busy} />;
-  }
-
-  if (profile.role === 'engineer') {
-    return <EngineerWorkspace profile={profile} plannedRows={plannedRows} onRefresh={loadAll} onLogout={changeProfile} onValidate={validatePlannedPole} onAdd={addPlannedPole} busy={busy} />;
-  }
-
-  if (profile.role === 'supervisor') {
-    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} busy={busy} />;
   }
 
   return (
