@@ -219,6 +219,10 @@ function readSavedProfile() {
   try {
     const saved = localStorage.getItem(PROFILE_KEY);
     const profile = saved ? JSON.parse(saved) : null;
+    if (['engineer', 'supervisor'].includes(profile?.role)) {
+      localStorage.removeItem(PROFILE_KEY);
+      return null;
+    }
     if (profile?.username) return null;
     if (profile?.role === 'tech' && !profile.city) return null;
     return profile;
@@ -1237,6 +1241,10 @@ function App() {
         .eq('id', data.session.user.id)
         .single();
       if (!mounted || !account?.active) return;
+      if (['engineer', 'supervisor'].includes(account.role)) {
+        await supabase.auth.signOut();
+        return;
+      }
       const nextProfile = {
         username: account.username,
         techName: account.display_name || account.username,
@@ -1285,6 +1293,10 @@ function App() {
     if (!account.active) {
       await supabase.auth.signOut();
       throw new Error('هذا المستخدم غير مفعّل.');
+    }
+    if (['engineer', 'supervisor'].includes(account.role)) {
+      await supabase.auth.signOut();
+      throw new Error('هذا المستخدم معطّل حاليًا.');
     }
 
     const nextProfile = {
