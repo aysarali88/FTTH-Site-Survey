@@ -1273,6 +1273,20 @@ function App() {
       return;
     }
 
+    if (loginDetails.legacyTech) {
+      const nextProfile = {
+        techName: loginDetails.username.trim(),
+        city: loginDetails.city.trim(),
+        district: loginDetails.district.trim(),
+        role: 'tech',
+      };
+      localStorage.setItem(PROFILE_KEY, JSON.stringify(nextProfile));
+      setProfile(nextProfile);
+      setForms(makeEmptyForms(nextProfile));
+      setMessage('تم تسجيل دخول الفني.');
+      return;
+    }
+
     if (!hasSupabaseConfig || !supabase) throw new Error('إعدادات Supabase غير موجودة.');
     const username = loginDetails.username.trim().toLowerCase();
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -2096,7 +2110,8 @@ function App() {
 
 function LoginPage({ onSave }) {
   const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [city, setCity] = useState('');
+  const [district, setDistrict] = useState('');
   const [adminMode, setAdminMode] = useState(false);
   const [adminPin, setAdminPin] = useState('');
   const [error, setError] = useState('');
@@ -2113,13 +2128,13 @@ function LoginPage({ onSave }) {
       await onSave({ username: username.trim() || 'Admin', legacyAdmin: true });
       return;
     }
-    if (!username.trim() || !password) {
-      setError('أدخل اسم المستخدم وكلمة المرور.');
+    if (!username.trim() || !city.trim() || !district.trim()) {
+      setError('أدخل اسم الفني والمدينة واسم المنطقة.');
       return;
     }
     setLoading(true);
     try {
-      await onSave({ username, password });
+      await onSave({ username, city, district, legacyTech: true });
     } catch (submitError) {
       setError(submitError.message === 'Invalid login credentials' ? 'اسم المستخدم أو كلمة المرور غير صحيحة.' : `تعذر تسجيل الدخول: ${submitError.message}`);
     } finally {
@@ -2135,7 +2150,7 @@ function LoginPage({ onSave }) {
         </div>
         <p className="eyebrow">Site Survey Pro</p>
         <h1>{adminMode ? 'دخول الأدمن' : 'تسجيل الدخول'}</h1>
-        <p className="loginText">استخدم اسم المستخدم وكلمة المرور الخاصة بك.</p>
+        <p className="loginText">أدخل اسم الفني والمدينة والمنطقة للبدء.</p>
 
         <label className="check adminSwitch">
           <input type="checkbox" checked={adminMode} onChange={(event) => setAdminMode(event.target.checked)} />
@@ -2143,15 +2158,19 @@ function LoginPage({ onSave }) {
         </label>
 
         <label>
-          اسم المستخدم
-          <input autoFocus value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Username" autoComplete="username" />
+          اسم الفني
+          <input autoFocus value={username} onChange={(event) => setUsername(event.target.value)} placeholder="اسم الفني" autoComplete="name" />
         </label>
-        {!adminMode && (
+        {!adminMode && <>
           <label>
-            كلمة المرور
-            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" autoComplete="current-password" />
+            المدينة
+            <input value={city} onChange={(event) => setCity(event.target.value)} placeholder="Misrata أو Tripoli" />
           </label>
-        )}
+          <label>
+            District
+            <input value={district} onChange={(event) => setDistrict(event.target.value)} placeholder="اسم المنطقة" />
+          </label>
+        </>}
         {adminMode && (
           <label>
             رمز الأدمن
@@ -2161,7 +2180,7 @@ function LoginPage({ onSave }) {
 
         {error && <div className="notice">{error}</div>}
 
-        <button className="save" type="submit" disabled={loading || (adminMode ? !adminPin.trim() : !username.trim() || !password)}>
+        <button className="save" type="submit" disabled={loading || (adminMode ? !adminPin.trim() : !username.trim() || !city.trim() || !district.trim())}>
           {loading ? 'جارٍ الدخول...' : 'دخول التطبيق'}
         </button>
       </form>
