@@ -2164,7 +2164,11 @@ function LoginPage({ onSave }) {
         {!adminMode && <>
           <label>
             المدينة
-            <input value={city} onChange={(event) => setCity(event.target.value)} placeholder="Misrata أو Tripoli" />
+            <select value={city} onChange={(event) => setCity(event.target.value)}>
+              <option value="">اختر المدينة</option>
+              <option value="Misrata">Misrata</option>
+              <option value="Tripoli">Tripoli</option>
+            </select>
           </label>
           <label>
             District
