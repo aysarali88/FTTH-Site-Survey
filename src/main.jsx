@@ -400,12 +400,17 @@ function canonicalizeDistricts(recordGroups) {
   Object.entries(recordGroups).forEach(([type, rows]) => {
     normalized[type] = rows.map((row) => {
       if (!row.district) return row;
-      const cityKey = districtKey(inferCity(row));
+      const sourceCity = inferCity(row);
+      const sourceCityKey = districtKey(sourceCity);
       const rawKey = districtKey(row.district);
-      const candidates = canonicalByCity.get(cityKey) || [];
-      const canonical = candidates.find((candidate) => rawKey === districtKey(candidate) || (Math.min(rawKey.length, districtKey(candidate)) >= 6 && similarityScore(rawKey, districtKey(candidate)) >= 0.9)) || districtAlias(row.district, inferCity(row));
-      if (canonical !== row.district) changes.push({ type, id: row.id, district: canonical });
-      return canonical === row.district ? row : { ...row, district: canonical };
+      const moveAndalusTwo = sourceCityKey === districtKey('Misrata') && ['حيالاندلس', 'حيالاندلس2', 'حيالندلس2'].includes(rawKey);
+      const targetCity = moveAndalusTwo ? 'Tripoli' : sourceCity;
+      const candidates = canonicalByCity.get(districtKey(targetCity)) || [];
+      const canonical = moveAndalusTwo
+        ? 'حي الاندلس 2'
+        : candidates.find((candidate) => rawKey === districtKey(candidate) || (Math.min(rawKey.length, districtKey(candidate)) >= 6 && similarityScore(rawKey, districtKey(candidate)) >= 0.9)) || districtAlias(row.district, targetCity);
+      if (canonical !== row.district || targetCity !== sourceCity) changes.push({ type, id: row.id, district: canonical, city: targetCity !== sourceCity ? targetCity : undefined });
+      return canonical === row.district && targetCity === sourceCity ? row : { ...row, city: targetCity, district: canonical };
     });
   });
   return { normalized, changes };
@@ -1360,7 +1365,9 @@ function App() {
       if (plannedError && plannedError.code !== '42P01') throw plannedError;
       const districtResult = canonicalizeDistricts(nextRecords);
       for (const change of districtResult.changes) {
-        const { error: districtError } = await supabase.from(resources[change.type].table).update({ district: change.district }).eq('id', change.id);
+        const update = { district: change.district };
+        if (change.city) update.city = change.city;
+        const { error: districtError } = await supabase.from(resources[change.type].table).update(update).eq('id', change.id);
         if (districtError) throw districtError;
       }
       setRecords(districtResult.normalized);
