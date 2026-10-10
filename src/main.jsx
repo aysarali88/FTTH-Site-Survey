@@ -346,6 +346,7 @@ function districtAlias(value, city) {
   if (districtKey(city) === 'طرابلس' || districtKey(city) === 'tripoli') {
     if (key === 'حيالاندلسم١' || key === 'حيالاندلس1') return 'حي الاندلس 1';
     if (key === 'حيالاندلس' || key === 'حيالندلس2' || key === 'حيالاندلس2') return 'حي الاندلس 2';
+    if (key === 'حيالاندلس٣' || key === 'حيالاندلس3') return 'حي الاندلس 3';
   }
   if (districtKey(city) === 'مصراته' || districtKey(city) === 'misrata') {
     if (key === 'all') return 'مقاوبه';
