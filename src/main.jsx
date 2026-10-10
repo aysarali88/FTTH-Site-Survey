@@ -347,6 +347,9 @@ function districtAlias(value, city) {
     if (key === 'حيالاندلسم١' || key === 'حيالاندلس1') return 'حي الاندلس 1';
     if (key === 'حيالاندلس' || key === 'حيالندلس2' || key === 'حيالاندلس2') return 'حي الاندلس 2';
   }
+  if (districtKey(city) === 'مصراته' || districtKey(city) === 'misrata') {
+    if (key === 'all') return 'مقاوبه';
+  }
   if (key === 'ولادابعيو') return 'ولاد بعيو';
   return cleanDistrictName(value);
 }
