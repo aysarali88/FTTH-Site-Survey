@@ -40,6 +40,10 @@ const IMPORT_BATCH_SIZE = 500;
 const MAX_IMPORTED_RECORDS_TO_RENDER = 500;
 const MAX_MAP_MARKERS = 2000;
 const MAX_TABLE_ROWS = 500;
+const CITY_DISTRICTS = {
+  Misrata: ['مقاوبه', 'ولاد بعيو', 'راس عمار', 'البيره والتعليم', 'راس التوته', 'راس علي', 'المنقوش', 'ولاد ابو شعاله', 'رويسات', 'مقاصبه'],
+  Tripoli: ['المنصوره', 'حي الاندلس 1', 'حي الاندلس 2', 'حي الاندلس 3', 'شارع الظل', 'نوفلين'],
+};
 
 const resources = {
   buildings: {
@@ -341,6 +345,7 @@ function districtAlias(value, city) {
   const key = districtKey(value);
   if (districtKey(city) === 'طرابلس' || districtKey(city) === 'tripoli') {
     if (key === 'حيالاندلسم١' || key === 'حيالاندلس1') return 'حي الاندلس 1';
+    if (key === 'حيالندلس2' || key === 'حيالاندلس2') return 'حي الاندلس 2';
   }
   if (key === 'ولادابعيو') return 'ولاد بعيو';
   return cleanDistrictName(value);
@@ -2116,6 +2121,12 @@ function LoginPage({ onSave }) {
   const [adminPin, setAdminPin] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const districtOptions = CITY_DISTRICTS[city] || [];
+
+  function changeCity(value) {
+    setCity(value);
+    setDistrict('');
+  }
 
   async function submit(event) {
     event.preventDefault();
@@ -2164,7 +2175,7 @@ function LoginPage({ onSave }) {
         {!adminMode && <>
           <label>
             المدينة
-            <select value={city} onChange={(event) => setCity(event.target.value)}>
+            <select value={city} onChange={(event) => changeCity(event.target.value)}>
               <option value="">اختر المدينة</option>
               <option value="Misrata">Misrata</option>
               <option value="Tripoli">Tripoli</option>
@@ -2172,7 +2183,10 @@ function LoginPage({ onSave }) {
           </label>
           <label>
             District
-            <input value={district} onChange={(event) => setDistrict(event.target.value)} placeholder="اسم المنطقة" />
+            <select value={district} onChange={(event) => setDistrict(event.target.value)} disabled={!city}>
+              <option value="">اختر المنطقة</option>
+              {districtOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
           </label>
         </>}
         {adminMode && (
