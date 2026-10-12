@@ -1141,7 +1141,7 @@ function SupervisorWorkspace({ profile, plannedRows, onRefresh, onLogout, onPlan
       {message && <div className="notice">{message}</div>}
       <section className="workspace">
       <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} selectedId={selectedId} onSelect={setSelectedId} onMapClick={() => {}} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
-      <section className="records" style={{ padding: 20 }}>
+      <section className="records panel open supervisorControls" style={{ padding: 20 }}>
         <div className="recordsHeader"><div><h2>Validated planting points</h2><span>Only engineer-approved points are shown.</span></div></div>
         <label style={{ marginTop: 14 }}>Point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{available.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} - {row.validation_status}</option>)}</select></label>
         {selected && <>
