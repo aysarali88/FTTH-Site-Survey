@@ -1065,7 +1065,18 @@ function EngineerMap({ rows, selectedId, onSelect, onMapClick }) {
       <EngineerMapClickHandler onMapClick={onMapClick} />
       {rows.map((row) => {
         const statusColor = row.validation_status === 'validated' ? '#2563eb' : row.validation_status === 'planted' ? '#16a34a' : row.validation_status === 'rejected' ? '#dc2626' : '#f59e0b';
-        return <CircleMarker key={row.id} center={[Number(row.latitude), Number(row.longitude)]} radius={row.id === selectedId ? 11 : 7} pathOptions={{ color: statusColor, fillColor: statusColor, fillOpacity: 0.85, weight: row.id === selectedId ? 4 : 2 }} eventHandlers={{ click: () => onSelect(row.id) }} />;
+        return <CircleMarker key={row.id} center={[Number(row.latitude), Number(row.longitude)]} radius={row.id === selectedId ? 11 : 7} pathOptions={{ color: statusColor, fillColor: statusColor, fillOpacity: 0.85, weight: row.id === selectedId ? 4 : 2 }} eventHandlers={{ click: () => onSelect(row.id) }}>
+          <Popup>
+            <div className="mapPointPopup" dir="rtl">
+              <strong>{row.point_name || row.id}</strong>
+              <span><b>Area / City:</b> {row.city || '-'}</span>
+              <span><b>District:</b> {row.district || '-'}</span>
+              <span><b>Status:</b> {row.validation_status || '-'}</span>
+              <span><b>Assign to:</b> {row.assigned_to || '-'}</span>
+              <span dir="ltr"><b>Coordinates:</b> {row.latitude}, {row.longitude}</span>
+            </div>
+          </Popup>
+        </CircleMarker>;
       })}
     </MapContainer>
   );
@@ -1074,6 +1085,13 @@ function EngineerMap({ rows, selectedId, onSelect, onMapClick }) {
 function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLogout, onValidate, onAdd, busy }) {
   const [selectedId, setSelectedId] = useState(plannedRows[0]?.id || '');
   const [status, setStatus] = useState('validated');
+  const [rememberedAssignedTo, setRememberedAssignedTo] = useState(() => {
+    try {
+      return localStorage.getItem(`engineer-default-technician:${profile.username || profile.techName}`) || '';
+    } catch {
+      return '';
+    }
+  });
   const [assignedTo, setAssignedTo] = useState('');
   const [notes, setNotes] = useState('');
   const [city, setCity] = useState(profile.city || 'Misrata');
@@ -1090,14 +1108,25 @@ function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLog
   useEffect(() => {
     setStatus(selected?.validation_status === 'rejected' ? 'rejected' : 'validated');
     setNotes(selected?.validation_notes || '');
-    setAssignedTo(selected?.assigned_to || '');
+    setAssignedTo(selected?.assigned_to || rememberedAssignedTo || '');
   }, [selectedId, selected?.validation_status, selected?.validation_notes, selected?.assigned_to]);
+
+  function rememberTechnician(value) {
+    setAssignedTo(value);
+    setRememberedAssignedTo(value);
+    try {
+      localStorage.setItem(`engineer-default-technician:${profile.username || profile.techName}`, value);
+    } catch {
+      // Local preference is optional; the database assignment remains authoritative.
+    }
+  }
 
   async function saveSelected() {
     if (!selected) return;
     setMessage('');
     try {
       await onValidate(selected, { status, notes, assignedTo });
+      if (status === 'validated' && assignedTo) rememberTechnician(assignedTo);
       setMessage('تم حفظ قرار الـ Validation.');
     } catch (error) {
       setMessage(`تعذر الحفظ: ${error.message}`);
@@ -1136,12 +1165,12 @@ function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLog
         <Menu size={24} />
       </button>
       <section className="workspace">
-        <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} selectedId={selectedId} onSelect={setSelectedId} onMapClick={handleMapClick} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div></div>
+        <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div></div>
         <section id="engineer-controls" className={`panel engineerControls ${controlsOpen ? 'open' : ''}`}>
           <div className="panelHeader"><div><p>Engineer review</p><h2>Validation queue</h2><span className="autoId">{plannedRows.length} planned points</span></div><Target color="#2563eb" /></div>
           <div className="fieldGrid"><label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label><label>District<input value={district} onChange={(event) => setDistrict(event.target.value)} /></label></div>
           <label style={{ marginTop: 14 }}>Point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{plannedRows.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} - {row.validation_status}</option>)}</select></label>
-          {selected && <><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label>{status === 'validated' && <label>Assign technician<select value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>}<label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy || (status === 'validated' && !assignedTo)}>Save decision</button></>}
+          {selected && <><div className="pointDetails"><div><span>Point</span><strong>{selected.point_name || selected.id}</strong></div><div><span>Area / City</span><strong>{selected.city || '-'}</strong></div><div><span>District</span><strong>{selected.district || '-'}</strong></div><div><span>Status</span><strong>{selected.validation_status || '-'}</strong></div></div><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label>{status === 'validated' && <label>Assign technician<select value={assignedTo} onChange={(event) => rememberTechnician(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>}<label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy || (status === 'validated' && !assignedTo)}>Save decision</button></>}
           <button className="ghost" type="button" style={{ width: '100%', marginTop: 12 }} onClick={() => setAddMode((value) => !value)}>{addMode ? 'Cancel add point' : 'Add point on map'}</button>
         </section>
       </section>

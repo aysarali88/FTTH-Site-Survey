@@ -671,6 +671,52 @@ button:disabled {
   min-height: 520px;
 }
 
+.mapPointPopup {
+  display: grid;
+  gap: 5px;
+  min-width: 190px;
+}
+
+.mapPointPopup strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.mapPointPopup span {
+  color: #334155;
+  font-size: 12px;
+}
+
+.pointDetails {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 14px 0;
+  padding: 12px;
+}
+
+.pointDetails div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.pointDetails span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.pointDetails strong {
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .batchList {
   display: grid;
   gap: 8px;
