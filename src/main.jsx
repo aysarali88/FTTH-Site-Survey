@@ -2333,12 +2333,6 @@ function LoginPage({ onSave }) {
             <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="كلمة المرور" autoComplete="current-password" />
           </label>
         )}
-        {!adminMode && loginMode === 'staff' && (
-          <label>
-            كلمة المرور
-            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="كلمة المرور" autoComplete="current-password" />
-          </label>
-        )}
         {adminMode && (
           <label>
             رمز الأدمن
