@@ -548,6 +548,65 @@ button:disabled {
   max-width: 220px;
 }
 
+.formHint {
+  color: #64748b;
+  font-size: 13px;
+  margin: -4px 0 14px;
+}
+
+.legacyAssignmentForm {
+  margin-top: 18px;
+}
+
+.legacyAssignmentForm .save {
+  max-width: 240px;
+}
+
+.legacyAssignmentsTable {
+  margin-top: 18px;
+}
+
+.workflowModeTabs {
+  display: flex;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+.workflowModeTabs button {
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  color: #0f172a;
+}
+
+.workflowModeTabs button.active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+}
+
+.legacyWorkspace {
+  grid-template-columns: minmax(0, 1.2fr) minmax(380px, 0.8fr);
+}
+
+.legacyControls {
+  align-self: start;
+}
+
+.legacyCount {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+  margin-top: 14px;
+  text-align: center;
+}
+
+.legacyEmpty {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 30px;
+}
+
 .userTableWrap {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -2057,7 +2116,8 @@ td {
   }
 
   .engineerControls,
-  .supervisorControls {
+  .supervisorControls,
+  .legacyControls {
     bottom: 12px;
     display: block !important;
     left: 12px;
@@ -2070,8 +2130,33 @@ td {
   }
 
   .engineerControls.open,
-  .supervisorControls.open {
+  .supervisorControls.open,
+  .legacyControls.open {
     transform: translateY(0);
+  }
+
+  .legacyPanelToggle {
+    display: inline-flex;
+  }
+
+  .workflowModeTabs {
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid #dbe4ef;
+    border-radius: 999px;
+    display: flex;
+    gap: 4px;
+    left: 12px;
+    margin: 0;
+    padding: 4px;
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    z-index: 5000;
+  }
+
+  .workflowModeTabs button {
+    font-size: 11px;
+    min-height: 38px;
+    padding: 7px 10px;
   }
 
   .designPreviewMap {

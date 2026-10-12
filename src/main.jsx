@@ -46,6 +46,13 @@ const CITY_DISTRICTS = {
   Misrata: ['مقاوبه', 'ولاد بعيو', 'راس عمار', 'البيره والتعليم', 'راس التوته', 'راس علي', 'المنقوش', 'ولاد ابو شعاله', 'رويسات', 'مقاصبه'],
   Tripoli: ['المنصوره', 'حي الاندلس 1', 'حي الاندلس 2', 'حي الاندلس 3', 'شارع الظل', 'نوفلين'],
 };
+const LEGACY_AREA_OPTIONS = [
+  { city: 'Misrata', district: 'راس عمار' },
+  { city: 'Misrata', district: 'راس علي' },
+  { city: 'Tripoli', district: 'شارع الظل' },
+  { city: 'Tripoli', district: 'حي الاندلس 2' },
+  { city: 'Tripoli', district: 'المنصوره' },
+];
 
 const resources = {
   buildings: {
@@ -1242,7 +1249,122 @@ function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLog
   );
 }
 
-function SupervisorWorkspace({ profile, plannedRows, onRefresh, onLogout, onPlant, busy }) {
+function LegacyTechnicianWorkspace({ assignments, records, onAdd, busy }) {
+  const activeAssignments = (assignments || []).filter((assignment) => assignment.active !== false);
+  const [selectedAreaId, setSelectedAreaId] = useState(activeAssignments[0]?.id || '');
+  const [location, setLocation] = useState(defaultLocation);
+  const [hasObjection, setHasObjection] = useState('لا');
+  const [isExisting, setIsExisting] = useState('لا');
+  const [notes, setNotes] = useState('');
+  const [photoFile, setPhotoFile] = useState(null);
+  const [message, setMessage] = useState('');
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const selectedArea = activeAssignments.find((assignment) => assignment.id === selectedAreaId) || activeAssignments[0] || null;
+  const areaRows = useMemo(
+    () => (records || []).filter((row) => row.city === selectedArea?.city && row.district === selectedArea?.district),
+    [records, selectedArea?.city, selectedArea?.district],
+  );
+  const mapRows = useMemo(
+    () => areaRows.filter((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude))).slice(0, MAX_MAP_MARKERS),
+    [areaRows],
+  );
+
+  useEffect(() => {
+    if (!selectedArea && activeAssignments[0]) setSelectedAreaId(activeAssignments[0].id);
+  }, [activeAssignments, selectedArea]);
+
+  useEffect(() => {
+    const lastRecord = areaRows[0];
+    if (lastRecord) {
+      setLocation({ latitude: Number(lastRecord.latitude), longitude: Number(lastRecord.longitude) });
+    } else if (selectedArea?.city === 'Misrata') {
+      setLocation({ latitude: 32.3754, longitude: 15.0925 });
+    } else {
+      setLocation(defaultLocation);
+    }
+  }, [selectedAreaId]);
+
+  async function submit() {
+    if (!selectedArea) return;
+    setMessage('');
+    try {
+      await onAdd({
+        latitude: location.latitude,
+        longitude: location.longitude,
+        city: selectedArea.city,
+        district: selectedArea.district,
+        hasObjection: hasObjection === 'نعم',
+        isExisting: isExisting === 'نعم',
+        notes,
+        photoFile,
+      });
+      setPhotoFile(null);
+      setNotes('');
+      setHasObjection('لا');
+      setIsExisting('لا');
+      setMessage('تم تسجيل زراعة العمود بنجاح.');
+    } catch (error) {
+      setMessage(`تعذر الحفظ: ${error.message}`);
+    }
+  }
+
+  if (!activeAssignments.length) {
+    return <div className="empty legacyEmpty">لا توجد منطقة Legacy معيّنة لك من الأدمن حتى الآن.</div>;
+  }
+
+  return (
+    <section className="workspace legacyWorkspace">
+      <div className="mapShell" style={{ minHeight: 650 }}>
+        <MapContainer
+          center={[location.latitude, location.longitude]}
+          zoom={18}
+          maxZoom={22}
+          scrollWheelZoom
+          zoomControl
+          className="map"
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            maxZoom={22}
+            maxNativeZoom={19}
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <MapCenterSync value={location} onChange={setLocation} />
+          <MapResizeSync expanded={false} />
+          <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} />
+        </MapContainer>
+        <div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div>
+        <div className="limitBadge">حرّك الخريطة وضع الدبوس على موقع العمود</div>
+      </div>
+      <button className="engineerPanelToggle legacyPanelToggle" type="button" onClick={() => setControlsOpen((value) => !value)} aria-expanded={controlsOpen} aria-controls="legacy-controls" aria-label={controlsOpen ? 'إخفاء لوحة الزراعة' : 'إظهار لوحة الزراعة'}><Menu size={24} /></button>
+      <section id="legacy-controls" className={`records panel legacyControls ${controlsOpen ? 'open' : ''}`} style={{ padding: 20 }}>
+        <div className="recordsHeader">
+          <div><h2>Legacy planting</h2><span>إضافة مباشرة للمناطق التي بدأ العمل فيها سابقًا</span></div>
+        </div>
+        <label style={{ marginTop: 14 }}>Assigned area
+          <select value={selectedArea?.id || ''} onChange={(event) => setSelectedAreaId(event.target.value)}>
+            {activeAssignments.map((assignment) => <option key={assignment.id} value={assignment.id}>{assignment.city} · {assignment.district}</option>)}
+          </select>
+        </label>
+        <div className="coordinateGrid">
+          <label>Latitude<input value={location.latitude} readOnly /></label>
+          <label>Longitude<input value={location.longitude} readOnly /></label>
+        </div>
+        <div className="fieldGrid">
+          <label>هل عليه اعتراض<select value={hasObjection} onChange={(event) => setHasObjection(event.target.value)}><option>لا</option><option>نعم</option></select></label>
+          <label>هل هو موجود<select value={isExisting} onChange={(event) => setIsExisting(event.target.value)}><option>لا</option><option>نعم</option></select></label>
+        </div>
+        <label style={{ marginTop: 14 }}>ملاحظة<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+        <label className="photoBox" style={{ marginTop: 14 }}><Camera size={22} /><span>{photoFile ? photoFile.name : 'التقاط صورة للعمود'}</span><input type="file" accept="image/*" capture="environment" onChange={(event) => setPhotoFile(event.target.files?.[0] || null)} /></label>
+        <button className="save" type="button" onClick={submit} disabled={busy}>{busy ? 'جارٍ الحفظ...' : 'تسجيل الزراعة'}</button>
+        {message && <div className="notice">{message}</div>}
+        <div className="legacyCount">تم تسجيل {areaRows.length} عمود في هذه المنطقة.</div>
+      </section>
+    </section>
+  );
+}
+
+function SupervisorWorkspace({ profile, plannedRows, legacyAssignments = [], legacyRecords = [], onRefresh, onLogout, onPlant, onLegacyAdd, busy }) {
   const available = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status) && (profile.role === 'supervisor' || row.assigned_to === profile.username || row.assigned_to === profile.techName));
   const [selectedId, setSelectedId] = useState(available[0]?.id || '');
   const [hasObjection, setHasObjection] = useState('لا');
@@ -1251,6 +1373,8 @@ function SupervisorWorkspace({ profile, plannedRows, onRefresh, onLogout, onPlan
   const [photoFile, setPhotoFile] = useState(null);
   const [message, setMessage] = useState('');
   const [controlsOpen, setControlsOpen] = useState(false);
+  const [workflowMode, setWorkflowMode] = useState('validated');
+  const isTechnician = profile.role === 'tech';
   const selected = available.find((row) => row.id === selectedId) || null;
 
   useEffect(() => {
@@ -1271,13 +1395,15 @@ function SupervisorWorkspace({ profile, plannedRows, onRefresh, onLogout, onPlan
 
   return (
     <main className="app adminMode">
-      <header className="topbar"><div><p className="eyebrow">Site Survey Pro</p><h1>Supervisor Planting</h1></div><div className="actions"><div className="profilePill"><UserRound size={17} /><span>{profile.techName}</span><strong>Supervisor</strong></div><button className="ghost" type="button" onClick={onLogout}><LogOut size={18} /> Logout</button><button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={18} /> Refresh</button></div></header>
+      <header className="topbar"><div><p className="eyebrow">Site Survey Pro</p><h1>{isTechnician ? 'Technician Planting' : 'Supervisor Planting'}</h1></div><div className="actions"><div className="profilePill"><UserRound size={17} /><span>{profile.techName}</span><strong>{isTechnician ? 'Technician' : 'Supervisor'}</strong></div><button className="ghost" type="button" onClick={onLogout}><LogOut size={18} /> Logout</button><button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={18} /> Refresh</button></div></header>
       <section className="stats"><article><CheckCircle2 size={19} /><span>Validated points</span><strong>{available.filter((row) => row.validation_status === 'validated').length}</strong></article><article><MapPin size={19} /><span>Planted</span><strong>{available.filter((row) => row.validation_status === 'planted').length}</strong></article><article><Camera size={19} /><span>Photos</span><strong>{available.filter((row) => row.is_planted && row.photo_url).length}</strong></article></section>
       {message && <div className="notice">{message}</div>}
+      {isTechnician && legacyAssignments.length > 0 && <div className="workflowModeTabs"><button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => setWorkflowMode('validated')}>Assigned validated points</button><button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => setWorkflowMode('legacy')}>Legacy areas</button></div>}
       <button className="mobileLogoutButton" type="button" onClick={onLogout}><LogOut size={18} /><span>تسجيل الخروج</span></button>
-      <button className="engineerPanelToggle" type="button" onClick={() => setControlsOpen((value) => !value)} aria-expanded={controlsOpen} aria-controls="supervisor-controls" aria-label={controlsOpen ? 'إخفاء لوحة الفني' : 'إظهار لوحة الفني'}>
+      {workflowMode === 'validated' && <button className="engineerPanelToggle" type="button" onClick={() => setControlsOpen((value) => !value)} aria-expanded={controlsOpen} aria-controls="supervisor-controls" aria-label={controlsOpen ? 'إخفاء لوحة الفني' : 'إظهار لوحة الفني'}>
         <Menu size={24} />
-      </button>
+      </button>}
+      {isTechnician && workflowMode === 'legacy' ? <LegacyTechnicianWorkspace assignments={legacyAssignments} records={legacyRecords} onAdd={onLegacyAdd} busy={busy} /> : <>
       <section className="workspace">
       <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} selectedId={selectedId} onSelect={setSelectedId} onMapClick={() => {}} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
       <section id="supervisor-controls" className={`records panel supervisorControls ${controlsOpen ? 'open' : ''}`} style={{ padding: 20 }}>
@@ -1294,6 +1420,7 @@ function SupervisorWorkspace({ profile, plannedRows, onRefresh, onLogout, onPlan
       </section>
       </section>
       <section className="records" style={{ marginTop: 16 }}><div className="recordsHeader"><h2>Point list</h2><span>{available.length} points</span></div><div className="tableWrap"><table><thead><tr><th>ID</th><th>City</th><th>District</th><th>Status</th></tr></thead><tbody>{available.slice(0, 500).map((row) => <tr key={row.id} onClick={() => setSelectedId(row.id)}><td>{row.id}</td><td>{row.city || '-'}</td><td>{row.district || '-'}</td><td>{row.validation_status}</td></tr>)}</tbody></table></div></section>
+      </>}
     </main>
   );
 }
@@ -1330,7 +1457,7 @@ function WorkflowQueue({ plannedRows, technicians, onAssign, onRefresh, busy }) 
   );
 }
 
-function UserManagement({ users, loading, error, onRefresh, onCreate, onToggle }) {
+function UserManagement({ users, loading, error, onRefresh, onCreate, onToggle, legacyAssignments = [], onAssignLegacy, onRemoveLegacy }) {
   const [form, setForm] = useState({
     username: '',
     displayName: '',
@@ -1339,11 +1466,20 @@ function UserManagement({ users, loading, error, onRefresh, onCreate, onToggle }
     city: '',
     district: '',
   });
+  const [legacyForm, setLegacyForm] = useState({ technicianUsername: '', city: 'Misrata', district: 'راس عمار' });
+  const legacyTechnicians = users.filter((user) => user.role === 'tech' && user.active);
+  const legacyDistricts = LEGACY_AREA_OPTIONS.filter((area) => area.city === legacyForm.city);
 
   async function submit(event) {
     event.preventDefault();
     await onCreate(form);
     setForm({ username: '', displayName: '', password: '', role: 'tech', city: '', district: '' });
+  }
+
+  async function submitLegacyAssignment(event) {
+    event.preventDefault();
+    await onAssignLegacy(legacyForm);
+    setLegacyForm((previous) => ({ ...previous, technicianUsername: '' }));
   }
 
   return (
@@ -1371,6 +1507,20 @@ function UserManagement({ users, loading, error, onRefresh, onCreate, onToggle }
         {users.map((user) => <tr key={user.id}><td>{user.username}</td><td>{user.display_name || '-'}</td><td>{roleLabel(user.role)}</td><td>{user.city || '-'}</td><td>{user.district || '-'}</td><td><span className={`statusPill ${user.active ? 'statusGood' : 'statusBad'}`}>{user.active ? 'Active' : 'Disabled'}</span></td><td><button className="ghost compactButton" type="button" onClick={() => onToggle(user)} disabled={loading}>{user.active ? 'Disable' : 'Enable'}</button></td></tr>)}
         {!users.length && <tr><td colSpan="7" className="empty">No managed users yet.</td></tr>}
       </tbody></table></div>
+      <form className="userCreateForm legacyAssignmentForm" onSubmit={submitLegacyAssignment}>
+        <div className="userFormTitle"><MapPinned size={20} /><strong>Assign Legacy area</strong></div>
+        <p className="formHint">هذه المناطق الخمس تعمل بالطريقة القديمة: الفني يضيف العمود مباشرة بدون ملف تصميم.</p>
+        <div className="fieldGrid">
+          <label>Technician<select required value={legacyForm.technicianUsername} onChange={(event) => setLegacyForm((prev) => ({ ...prev, technicianUsername: event.target.value }))}><option value="">Select technician...</option>{legacyTechnicians.map((user) => <option key={user.id} value={user.username}>{user.display_name || user.username}</option>)}</select></label>
+          <label>City<select value={legacyForm.city} onChange={(event) => { const city = event.target.value; setLegacyForm((prev) => ({ ...prev, city, district: LEGACY_AREA_OPTIONS.find((area) => area.city === city)?.district || '' })); }}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label>
+          <label>District<select required value={legacyForm.district} onChange={(event) => setLegacyForm((prev) => ({ ...prev, district: event.target.value }))}>{legacyDistricts.map((area) => <option key={area.district} value={area.district}>{area.district}</option>)}</select></label>
+        </div>
+        <button className="save" type="submit" disabled={loading || !legacyTechnicians.length}>Assign area</button>
+      </form>
+      <div className="tableWrap userTableWrap legacyAssignmentsTable"><table><thead><tr><th>Technician</th><th>City</th><th>District</th><th>Status</th><th>Action</th></tr></thead><tbody>
+        {legacyAssignments.map((assignment) => <tr key={assignment.id}><td>{assignment.technician_username}</td><td>{assignment.city}</td><td>{assignment.district}</td><td><span className="statusPill statusGood">Active</span></td><td><button className="ghost compactButton" type="button" onClick={() => onRemoveLegacy(assignment)} disabled={loading}>Remove</button></td></tr>)}
+        {!legacyAssignments.length && <tr><td colSpan="5" className="empty">No Legacy areas assigned yet.</td></tr>}
+      </tbody></table></div>
     </section>
   );
 }
@@ -1381,6 +1531,7 @@ function App() {
   const [forms, setForms] = useState(() => makeEmptyForms(readSavedProfile()));
   const [records, setRecords] = useState({ buildings: [], poles: [], column_checks: [] });
   const [plannedRows, setPlannedRows] = useState([]);
+  const [legacyAssignments, setLegacyAssignments] = useState([]);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -1598,6 +1749,49 @@ function App() {
     }
   }
 
+  async function assignLegacyArea(details) {
+    if (!supabase) throw new Error('إعدادات Supabase غير موجودة.');
+    setUsersBusy(true);
+    setUsersError('');
+    try {
+      const { data, error } = await supabase.rpc('admin_assign_legacy_area', {
+        p_technician_username: details.technicianUsername,
+        p_city: details.city,
+        p_district: details.district,
+      });
+      if (error) throw error;
+      setLegacyAssignments((currentAssignments) => [
+        data,
+        ...currentAssignments.filter((assignment) => assignment.id !== data.id),
+      ]);
+      setMessage('تم تعيين المنطقة Legacy للفني.');
+    } catch (error) {
+      const detailsText = error?.message || 'تعذر تعيين المنطقة.';
+      setUsersError(detailsText);
+      throw error;
+    } finally {
+      setUsersBusy(false);
+    }
+  }
+
+  async function removeLegacyArea(assignment) {
+    if (!window.confirm(`إزالة منطقة ${assignment.district} من الفني؟`)) return;
+    if (!supabase) throw new Error('إعدادات Supabase غير موجودة.');
+    setUsersBusy(true);
+    setUsersError('');
+    try {
+      const { error } = await supabase.rpc('admin_remove_legacy_area', { p_id: assignment.id });
+      if (error) throw error;
+      setLegacyAssignments((currentAssignments) => currentAssignments.filter((item) => item.id !== assignment.id));
+      setMessage('تمت إزالة تعيين المنطقة.');
+    } catch (error) {
+      setUsersError(error?.message || 'تعذر إزالة تعيين المنطقة.');
+      throw error;
+    } finally {
+      setUsersBusy(false);
+    }
+  }
+
   useEffect(() => {
     if (isAdmin && adminPage === 'users' && supabase) manageUsers('list').catch(() => {});
   }, [isAdmin, adminPage]);
@@ -1623,6 +1817,17 @@ function App() {
         .order('created_at', { ascending: false })
         .limit(5000);
       if (plannedError && plannedError.code !== '42P01') throw plannedError;
+      if (['admin', 'design', 'engineer', 'tech'].includes(profile?.role)) {
+        const { data: assignments, error: assignmentsError } = await supabase
+          .from('legacy_area_assignments')
+          .select('*')
+          .eq('active', true)
+          .order('created_at', { ascending: false });
+        if (assignmentsError && assignmentsError.code !== '42P01') throw assignmentsError;
+        setLegacyAssignments(assignments || []);
+      } else {
+        setLegacyAssignments([]);
+      }
       if (['design', 'engineer'].includes(profile?.role) || (profile?.role === 'admin' && profile?.username)) {
         const { data: users, error: usersError } = await supabase
           .from('user_profiles')
@@ -1789,6 +1994,30 @@ function App() {
       if (error) throw error;
       setPlannedRows((currentRows) => currentRows.map((item) => item.id === row.id ? data.planned : item));
       setRecords((currentRecords) => ({ ...currentRecords, column_checks: [data.record, ...currentRecords.column_checks] }));
+      return data;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addLegacyPlanting(details) {
+    if (!supabase) throw new Error('إعدادات Supabase غير موجودة.');
+    setBusy(true);
+    try {
+      const provisionalId = `legacy-${Date.now()}`;
+      const photoUrl = details.photoFile ? await uploadPhotoFile(details.photoFile, 'column_checks', provisionalId) : '';
+      const { data, error } = await supabase.rpc('technician_add_legacy_planting', {
+        p_latitude: Number(details.latitude),
+        p_longitude: Number(details.longitude),
+        p_city: details.city,
+        p_district: details.district,
+        p_has_objection: details.hasObjection,
+        p_is_existing: details.isExisting,
+        p_notes: details.notes || null,
+        p_photo_url: photoUrl || null,
+      });
+      if (error) throw error;
+      setRecords((currentRecords) => ({ ...currentRecords, column_checks: [data, ...currentRecords.column_checks] }));
       return data;
     } finally {
       setBusy(false);
@@ -2121,11 +2350,11 @@ function App() {
   }
 
   if (profile.role === 'supervisor') {
-    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} busy={busy} />;
+    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} legacyRecords={records.column_checks} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} busy={busy} />;
   }
 
   if (profile.role === 'tech' && profile.username) {
-    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} busy={busy} />;
+    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} legacyAssignments={legacyAssignments} legacyRecords={records.column_checks} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} onLegacyAdd={addLegacyPlanting} busy={busy} />;
   }
 
   return (
@@ -2212,11 +2441,14 @@ function App() {
       {isAdmin && adminPage === 'users' && (
         <UserManagement
           users={managedUsers}
+          legacyAssignments={legacyAssignments}
           loading={usersBusy}
           error={usersError || (!supabase ? 'إعدادات Supabase غير موجودة.' : '')}
           onRefresh={() => manageUsers('list').catch(() => {})}
           onCreate={(user) => manageUsers('create', { user })}
           onToggle={(user) => manageUsers('toggle', { id: user.id, active: !user.active })}
+          onAssignLegacy={assignLegacyArea}
+          onRemoveLegacy={removeLegacyArea}
         />
       )}
 
