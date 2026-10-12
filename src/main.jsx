@@ -742,6 +742,7 @@ function MapLayers() {
         <TileLayer
           attribution='Imagery &copy; <a href="https://www.esri.com/">Esri</a>'
           maxZoom={22}
+          maxNativeZoom={19}
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         />
       </LayersControl.BaseLayer>
