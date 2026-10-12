@@ -16,6 +16,7 @@ import {
   Plus,
   RefreshCcw,
   Search,
+  SlidersHorizontal,
   Target,
   Trash2,
   Upload,
@@ -1043,6 +1044,7 @@ function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLog
   const [city, setCity] = useState(profile.city || 'Misrata');
   const [district, setDistrict] = useState(profile.district || '');
   const [addMode, setAddMode] = useState(false);
+  const [controlsOpen, setControlsOpen] = useState(false);
   const [message, setMessage] = useState('');
   const selected = plannedRows.find((row) => row.id === selectedId) || null;
 
@@ -1094,9 +1096,14 @@ function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLog
       <header className="topbar"><div><p className="eyebrow">Site Survey Pro</p><h1>Engineer Validation</h1></div><div className="actions"><div className="profilePill"><UserRound size={17} /><span>{profile.techName}</span><strong>Engineer</strong></div><button className="ghost" type="button" onClick={onLogout}><LogOut size={18} /> Logout</button><button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={18} /> Refresh</button></div></header>
       <section className="stats"><article><Target size={19} /><span>Pending</span><strong>{pending.length}</strong></article><article><CheckCircle2 size={19} /><span>Validated</span><strong>{plannedRows.filter((row) => row.validation_status === 'validated').length}</strong></article><article><X size={19} /><span>Rejected</span><strong>{plannedRows.filter((row) => row.validation_status === 'rejected').length}</strong></article></section>
       {message && <div className="notice">{message}</div>}
+      <button className="mobileLogoutButton" type="button" onClick={onLogout}><LogOut size={18} /><span>تسجيل الخروج</span></button>
+      <button className="engineerPanelToggle" type="button" onClick={() => setControlsOpen((value) => !value)} aria-expanded={controlsOpen} aria-controls="engineer-controls">
+        <SlidersHorizontal size={19} />
+        <span>{controlsOpen ? 'إخفاء الخيارات' : 'خيارات المهندس'}</span>
+      </button>
       <section className="workspace">
         <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} selectedId={selectedId} onSelect={setSelectedId} onMapClick={handleMapClick} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">{addMode ? 'اضغط على الخريطة لإضافة نقطة' : 'اضغط على نقطة ثم اضغط على الخريطة لتحريكها'}</div></div>
-        <section className="panel open" style={{ position: 'relative' }}>
+        <section id="engineer-controls" className={`panel engineerControls ${controlsOpen ? 'open' : ''}`} style={{ position: 'relative' }}>
           <div className="panelHeader"><div><p>Engineer review</p><h2>Validation queue</h2><span className="autoId">{plannedRows.length} planned points</span></div><Target color="#2563eb" /></div>
           <div className="fieldGrid"><label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label><label>District<input value={district} onChange={(event) => setDistrict(event.target.value)} /></label></div>
           <label style={{ marginTop: 14 }}>Point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{plannedRows.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} - {row.validation_status}</option>)}</select></label>
@@ -1139,6 +1146,7 @@ function SupervisorWorkspace({ profile, plannedRows, onRefresh, onLogout, onPlan
       <header className="topbar"><div><p className="eyebrow">Site Survey Pro</p><h1>Supervisor Planting</h1></div><div className="actions"><div className="profilePill"><UserRound size={17} /><span>{profile.techName}</span><strong>Supervisor</strong></div><button className="ghost" type="button" onClick={onLogout}><LogOut size={18} /> Logout</button><button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={18} /> Refresh</button></div></header>
       <section className="stats"><article><CheckCircle2 size={19} /><span>Validated points</span><strong>{available.filter((row) => row.validation_status === 'validated').length}</strong></article><article><MapPin size={19} /><span>Planted</span><strong>{available.filter((row) => row.validation_status === 'planted').length}</strong></article><article><Camera size={19} /><span>Photos</span><strong>{available.filter((row) => row.is_planted && row.photo_url).length}</strong></article></section>
       {message && <div className="notice">{message}</div>}
+      <button className="mobileLogoutButton" type="button" onClick={onLogout}><LogOut size={18} /><span>تسجيل الخروج</span></button>
       <section className="workspace">
       <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} selectedId={selectedId} onSelect={setSelectedId} onMapClick={() => {}} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
       <section className="records panel open supervisorControls" style={{ padding: 20 }}>
