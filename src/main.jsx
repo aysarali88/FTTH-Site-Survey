@@ -1095,7 +1095,9 @@ function EngineerMap({ rows, selectedId, onSelect, onMapClick, onMovePoint, addM
             click: () => {
               if (!moveMode) onSelect(row.id);
             },
-            dragstart: () => onSelect(row.id),
+            dragstart: () => {
+              if (!moveMode) onSelect(row.id);
+            },
             dragend: (event) => {
               const position = event.target.getLatLng();
               onMovePoint?.(row, position);
