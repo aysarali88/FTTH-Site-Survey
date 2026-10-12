@@ -1075,7 +1075,7 @@ function engineerPointIcon(color, selected) {
   });
 }
 
-function EngineerMap({ rows, selectedId, onSelect, onMapClick, onMovePoint, addMode = false }) {
+function EngineerMap({ rows, selectedId, onSelect, onMapClick, onMovePoint, addMode = false, moveMode = false }) {
   const first = rows.find((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)));
   const center = first ? [Number(first.latitude), Number(first.longitude)] : [defaultLocation.latitude, defaultLocation.longitude];
   return (
@@ -1090,9 +1090,11 @@ function EngineerMap({ rows, selectedId, onSelect, onMapClick, onMovePoint, addM
           position={[Number(row.latitude), Number(row.longitude)]}
           icon={engineerPointIcon(statusColor, selected)}
           interactive={!addMode}
-          draggable={!addMode && Boolean(onMovePoint) && selected}
+          draggable={!addMode && Boolean(onMovePoint) && moveMode && selected}
           eventHandlers={{
-            click: () => onSelect(row.id),
+            click: () => {
+              if (!moveMode) onSelect(row.id);
+            },
             dragstart: () => onSelect(row.id),
             dragend: (event) => {
               const position = event.target.getLatLng();
@@ -1100,16 +1102,16 @@ function EngineerMap({ rows, selectedId, onSelect, onMapClick, onMovePoint, addM
             },
           }}
         >
-          <Popup>
-            <div className="mapPointPopup" dir="rtl">
-              <strong>{row.point_name || row.id}</strong>
-              <span><b>Area / City:</b> {row.city || '-'}</span>
-              <span><b>District:</b> {row.district || '-'}</span>
-              <span><b>Status:</b> {row.validation_status || '-'}</span>
-              <span><b>Assign to:</b> {row.assigned_to || '-'}</span>
-              <span dir="ltr"><b>Coordinates:</b> {row.latitude}, {row.longitude}</span>
-            </div>
-          </Popup>
+          {!moveMode && <Popup>
+              <div className="mapPointPopup" dir="rtl">
+                <strong>{row.point_name || row.id}</strong>
+                <span><b>Area / City:</b> {row.city || '-'}</span>
+                <span><b>District:</b> {row.district || '-'}</span>
+                <span><b>Status:</b> {row.validation_status || '-'}</span>
+                <span><b>Assign to:</b> {row.assigned_to || '-'}</span>
+                <span dir="ltr"><b>Coordinates:</b> {row.latitude}, {row.longitude}</span>
+              </div>
+            </Popup>}
         </Marker>;
       })}
     </MapContainer>
@@ -1131,6 +1133,7 @@ function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLog
   const [city, setCity] = useState(profile.city || 'Misrata');
   const [district, setDistrict] = useState(profile.district || '');
   const [addMode, setAddMode] = useState(false);
+  const [moveMode, setMoveMode] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
   const [message, setMessage] = useState('');
   const selected = plannedRows.find((row) => row.id === selectedId) || null;
@@ -1140,6 +1143,7 @@ function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLog
   }, [plannedRows, selected]);
 
   useEffect(() => {
+    setMoveMode(false);
     setStatus(selected?.validation_status === 'rejected' ? 'rejected' : 'validated');
     setNotes(selected?.validation_notes || '');
     setAssignedTo(selected?.assigned_to || rememberedAssignedTo || '');
@@ -1185,6 +1189,7 @@ function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLog
     setMessage('');
     try {
       await onMove(row, { latitude: position.lat, longitude: position.lng });
+      setMoveMode(false);
       setMessage('تم تحديث موقع النقطة وحفظه.');
     } catch (error) {
       setMessage(`تعذر تحديث الموقع: ${error.message}`);
@@ -1214,12 +1219,12 @@ function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLog
         <Menu size={24} />
       </button>
       <section className="workspace">
-        <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} onMovePoint={handleMovePoint} addMode={addMode} />{addMode && <div className="mapAddHint">Click on the map to place a new point</div>}<div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div></div>
+        <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} onMovePoint={handleMovePoint} addMode={addMode} moveMode={moveMode} />{addMode && <div className="mapAddHint">Click on the map to place a new point</div>}{moveMode && <div className="mapMoveHint">Drag the selected point to the correct location.</div>}<div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div></div>
         <section id="engineer-controls" className={`panel engineerControls ${controlsOpen ? 'open' : ''}`}>
           <div className="panelHeader"><div><p>Engineer review</p><h2>Validation queue</h2><span className="autoId">{plannedRows.length} planned points</span></div><Target color="#2563eb" /></div>
-          {selected && <><div className="pointDetails"><div><span>Point</span><strong>{selected.point_name || selected.id}</strong></div><div><span>Area / City</span><strong>{selected.city || '-'}</strong></div><div><span>District</span><strong>{selected.district || '-'}</strong></div><div><span>Status</span><strong>{selected.validation_status || '-'}</strong></div></div><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label>{status === 'validated' && <label>Assign technician<select value={assignedTo} onChange={(event) => rememberTechnician(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>}<label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy || (status === 'validated' && !assignedTo)}>Save decision</button><button className="dangerMini engineerDeleteButton" type="button" onClick={deleteSelected} disabled={busy || selected.validation_status === 'planted'}><Trash2 size={17} /> Delete point</button></>}
+          {selected && <><div className="pointDetails"><div><span>Point</span><strong>{selected.point_name || selected.id}</strong></div><div><span>Area / City</span><strong>{selected.city || '-'}</strong></div><div><span>District</span><strong>{selected.district || '-'}</strong></div><div><span>Status</span><strong>{selected.validation_status || '-'}</strong></div></div><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><button className={`ghost moveLocationButton${moveMode ? ' active' : ''}`} type="button" onClick={() => { setAddMode(false); setMoveMode((value) => !value); }} disabled={busy}><MapPin size={17} />{moveMode ? 'Finish editing location' : 'Edit location'}</button>{moveMode && <div className="moveLocationHint">Drag the selected point to the correct location.</div>}<label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label>{status === 'validated' && <label>Assign technician<select value={assignedTo} onChange={(event) => rememberTechnician(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>}<label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy || (status === 'validated' && !assignedTo)}>Save decision</button><button className="dangerMini engineerDeleteButton" type="button" onClick={deleteSelected} disabled={busy || selected.validation_status === 'planted'}><Trash2 size={17} /> Delete point</button></>}
           {addMode && <div className="fieldGrid" style={{ marginBottom: 14 }}><label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label><label>District<input value={district} onChange={(event) => setDistrict(event.target.value)} /></label></div>}
-          <button className="ghost" type="button" style={{ width: '100%', marginTop: 12 }} onClick={() => setAddMode((value) => !value)}>{addMode ? 'Cancel add point' : 'Add point on map'}</button>
+          <button className="ghost" type="button" style={{ width: '100%', marginTop: 12 }} onClick={() => { setMoveMode(false); setAddMode((value) => !value); }}>{addMode ? 'Cancel add point' : 'Add point on map'}</button>
         </section>
       </section>
     </main>

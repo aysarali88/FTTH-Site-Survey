@@ -605,6 +605,23 @@ button:disabled {
   z-index: 540;
 }
 
+.mapMoveHint {
+  background: rgba(37, 99, 235, 0.94);
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  left: 50%;
+  max-width: calc(100% - 32px);
+  padding: 10px 14px;
+  pointer-events: none;
+  position: absolute;
+  text-align: center;
+  top: 18px;
+  transform: translateX(-50%);
+  z-index: 540;
+}
+
 .logoutButton {
   background: #ffffff;
   border: 1px solid #dbe4ef;
@@ -702,6 +719,33 @@ button:disabled {
 .mapPointPopup span {
   color: #334155;
   font-size: 12px;
+}
+
+.moveLocationButton {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+  justify-content: center;
+  margin-top: 12px;
+  width: 100%;
+}
+
+.moveLocationButton.active {
+  background: #dbeafe;
+  border-color: #2563eb;
+  color: #1d4ed8;
+}
+
+.moveLocationHint {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  margin-top: 8px;
+  padding: 9px 11px;
+  text-align: center;
 }
 
 .engineerPointIcon {
