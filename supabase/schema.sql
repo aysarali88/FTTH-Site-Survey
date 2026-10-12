@@ -56,6 +56,11 @@ $$;
 revoke all on function public.current_app_role() from public;
 grant execute on function public.current_app_role() to authenticated;
 
+drop policy if exists "workflow roles can read technician profiles" on public.user_profiles;
+create policy "workflow roles can read technician profiles" on public.user_profiles
+for select to authenticated
+using (public.current_app_role() in ('admin', 'design', 'engineer'));
+
 create table if not exists public.planned_poles (
   id text primary key,
   latitude double precision not null,
@@ -67,6 +72,10 @@ create table if not exists public.planned_poles (
   validation_notes text,
   validated_by text,
   validated_at timestamptz,
+  assigned_to text,
+  assigned_at timestamptz,
+  batch_id text,
+  deleted_at timestamptz,
   is_planted boolean not null default false,
   planted_record_id text,
   created_by text,
@@ -76,9 +85,17 @@ create table if not exists public.planned_poles (
 
 alter table public.planned_poles enable row level security;
 
+alter table public.planned_poles add column if not exists assigned_to text;
+alter table public.planned_poles add column if not exists assigned_at timestamptz;
+alter table public.planned_poles add column if not exists batch_id text;
+alter table public.planned_poles add column if not exists deleted_at timestamptz;
+
 drop policy if exists "authenticated read planned poles" on public.planned_poles;
 create policy "authenticated read planned poles" on public.planned_poles
-for select to authenticated using (public.current_app_role() in ('admin', 'design', 'engineer', 'supervisor'));
+for select to authenticated using (
+  public.current_app_role() in ('admin', 'design', 'engineer')
+  or (public.current_app_role() in ('tech', 'supervisor') and assigned_to = (select username from public.user_profiles where id = (select auth.uid())))
+);
 
 drop policy if exists "design insert planned poles" on public.planned_poles;
 create policy "design insert planned poles" on public.planned_poles
@@ -97,7 +114,7 @@ grant select, insert, update, delete on public.planned_poles to authenticated;
 
 create or replace function public.engineer_update_planned_pole(
   p_id text, p_latitude double precision, p_longitude double precision,
-  p_status text, p_notes text default null
+  p_status text, p_notes text default null, p_assigned_to text default null
 )
 returns public.planned_poles language plpgsql security definer set search_path = public
 as $$
@@ -108,7 +125,10 @@ begin
   select username into actor from public.user_profiles where id = (select auth.uid());
   update public.planned_poles set latitude = p_latitude, longitude = p_longitude,
     validation_status = p_status, validation_notes = nullif(trim(coalesce(p_notes, '')), ''),
-    validated_by = actor, validated_at = now(), updated_at = now()
+    validated_by = actor, validated_at = now(),
+    assigned_to = case when p_status = 'validated' then nullif(trim(coalesce(p_assigned_to, '')), '') else null end,
+    assigned_at = case when p_status = 'validated' and nullif(trim(coalesce(p_assigned_to, '')), '') is not null then now() else null end,
+    updated_at = now()
   where id = p_id returning * into result_row;
   if result_row.id is null then raise exception 'Planned pole not found'; end if;
   return result_row;
@@ -133,10 +153,28 @@ begin
 end;
 $$;
 
-revoke all on function public.engineer_update_planned_pole(text, double precision, double precision, text, text) from public;
-grant execute on function public.engineer_update_planned_pole(text, double precision, double precision, text, text) to authenticated;
+revoke all on function public.engineer_update_planned_pole(text, double precision, double precision, text, text, text) from public;
+grant execute on function public.engineer_update_planned_pole(text, double precision, double precision, text, text, text) to authenticated;
 revoke all on function public.engineer_add_planned_pole(double precision, double precision, text, text, text) from public;
 grant execute on function public.engineer_add_planned_pole(double precision, double precision, text, text, text) to authenticated;
+
+create or replace function public.assign_planned_poles(p_ids text[], p_technician text)
+returns integer language plpgsql security definer set search_path = public
+as $$
+declare updated_count integer;
+begin
+  if public.current_app_role() not in ('admin', 'engineer') then raise exception 'Not authorized'; end if;
+  if nullif(trim(coalesce(p_technician, '')), '') is null then raise exception 'Technician is required'; end if;
+  update public.planned_poles
+  set assigned_to = trim(p_technician), assigned_at = now(), updated_at = now()
+  where id = any(p_ids) and validation_status = 'validated' and deleted_at is null;
+  get diagnostics updated_count = row_count;
+  return updated_count;
+end;
+$$;
+
+revoke all on function public.assign_planned_poles(text[], text) from public;
+grant execute on function public.assign_planned_poles(text[], text) to authenticated;
 
 create or replace function public.supervisor_plant_planned_pole(
   p_id text, p_has_objection boolean, p_is_existing boolean,
@@ -146,8 +184,10 @@ returns jsonb language plpgsql security definer set search_path = public
 as $$
 declare plan_row public.planned_poles; saved_record public.column_checks; actor text; record_id text;
 begin
-  if public.current_app_role() not in ('admin', 'supervisor') then raise exception 'Not authorized'; end if;
-  select * into plan_row from public.planned_poles where id = p_id and validation_status = 'validated';
+  if public.current_app_role() not in ('admin', 'supervisor', 'tech') then raise exception 'Not authorized'; end if;
+  select * into plan_row from public.planned_poles
+  where id = p_id and validation_status = 'validated' and deleted_at is null
+    and (public.current_app_role() = 'admin' or assigned_to = (select username from public.user_profiles where id = (select auth.uid())));
   if plan_row.id is null then raise exception 'Only validated points can be planted'; end if;
   select username into actor from public.user_profiles where id = (select auth.uid());
   record_id := 'COL-' || to_char(clock_timestamp(), 'YYYYMMDDHH24MISSMS') || '-' || upper(substr(md5(random()::text), 1, 6));

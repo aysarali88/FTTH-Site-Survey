@@ -223,10 +223,6 @@ function readSavedProfile() {
   try {
     const saved = localStorage.getItem(PROFILE_KEY);
     const profile = saved ? JSON.parse(saved) : null;
-    if (['engineer', 'supervisor'].includes(profile?.role)) {
-      localStorage.removeItem(PROFILE_KEY);
-      return null;
-    }
     if (profile?.username) return null;
     if (profile?.role === 'tech' && !profile.city) return null;
     return profile;
@@ -1026,16 +1022,17 @@ function EngineerMap({ rows, selectedId, onSelect, onMapClick }) {
     <MapContainer center={center} zoom={14} maxZoom={22} scrollWheelZoom className="map" zoomControl>
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' maxZoom={22} maxNativeZoom={19} url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       {rows.map((row) => {
-        const statusColor = row.validation_status === 'validated' ? '#16a34a' : row.validation_status === 'planted' ? '#2563eb' : row.validation_status === 'rejected' ? '#dc2626' : '#f59e0b';
+        const statusColor = row.validation_status === 'validated' ? '#2563eb' : row.validation_status === 'planted' ? '#16a34a' : row.validation_status === 'rejected' ? '#dc2626' : '#f59e0b';
         return <CircleMarker key={row.id} center={[Number(row.latitude), Number(row.longitude)]} radius={row.id === selectedId ? 11 : 7} pathOptions={{ color: statusColor, fillColor: statusColor, fillOpacity: 0.85, weight: row.id === selectedId ? 4 : 2 }} eventHandlers={{ click: () => onSelect(row.id) }} />;
       })}
     </MapContainer>
   );
 }
 
-function EngineerWorkspace({ profile, plannedRows, onRefresh, onLogout, onValidate, onAdd, busy }) {
+function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLogout, onValidate, onAdd, busy }) {
   const [selectedId, setSelectedId] = useState(plannedRows[0]?.id || '');
   const [status, setStatus] = useState('validated');
+  const [assignedTo, setAssignedTo] = useState('');
   const [notes, setNotes] = useState('');
   const [city, setCity] = useState(profile.city || 'Misrata');
   const [district, setDistrict] = useState(profile.district || '');
@@ -1050,13 +1047,14 @@ function EngineerWorkspace({ profile, plannedRows, onRefresh, onLogout, onValida
   useEffect(() => {
     setStatus(selected?.validation_status === 'rejected' ? 'rejected' : 'validated');
     setNotes(selected?.validation_notes || '');
-  }, [selectedId, selected?.validation_status, selected?.validation_notes]);
+    setAssignedTo(selected?.assigned_to || '');
+  }, [selectedId, selected?.validation_status, selected?.validation_notes, selected?.assigned_to]);
 
   async function saveSelected() {
     if (!selected) return;
     setMessage('');
     try {
-      await onValidate(selected, { status, notes });
+      await onValidate(selected, { status, notes, assignedTo });
       setMessage('تم حفظ قرار الـ Validation.');
     } catch (error) {
       setMessage(`تعذر الحفظ: ${error.message}`);
@@ -1077,7 +1075,7 @@ function EngineerWorkspace({ profile, plannedRows, onRefresh, onLogout, onValida
     }
     if (!selected) return;
     try {
-      await onValidate(selected, { status, notes, latitude: latlng.lat, longitude: latlng.lng });
+      await onValidate(selected, { status, notes, assignedTo, latitude: latlng.lat, longitude: latlng.lng });
       setMessage('تم تحديث موقع النقطة وحفظه.');
     } catch (error) {
       setMessage(`تعذر تحريك النقطة: ${error.message}`);
@@ -1096,7 +1094,7 @@ function EngineerWorkspace({ profile, plannedRows, onRefresh, onLogout, onValida
           <div className="panelHeader"><div><p>Engineer review</p><h2>Validation queue</h2><span className="autoId">{plannedRows.length} planned points</span></div><Target color="#2563eb" /></div>
           <div className="fieldGrid"><label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label><label>District<input value={district} onChange={(event) => setDistrict(event.target.value)} /></label></div>
           <label style={{ marginTop: 14 }}>Point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{plannedRows.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} - {row.validation_status}</option>)}</select></label>
-          {selected && <><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label><label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy}>Save decision</button></>}
+          {selected && <><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label>{status === 'validated' && <label>Assign technician<select value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>}<label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy || (status === 'validated' && !assignedTo)}>Save decision</button></>}
           <button className="ghost" type="button" style={{ width: '100%', marginTop: 12 }} onClick={() => setAddMode((value) => !value)}>{addMode ? 'Cancel add point' : 'Add point on map'}</button>
         </section>
       </section>
@@ -1105,7 +1103,7 @@ function EngineerWorkspace({ profile, plannedRows, onRefresh, onLogout, onValida
 }
 
 function SupervisorWorkspace({ profile, plannedRows, onRefresh, onLogout, onPlant, busy }) {
-  const available = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status));
+  const available = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status) && (profile.role === 'supervisor' || row.assigned_to === profile.username || row.assigned_to === profile.techName));
   const [selectedId, setSelectedId] = useState(available[0]?.id || '');
   const [hasObjection, setHasObjection] = useState('لا');
   const [isExisting, setIsExisting] = useState('لا');
@@ -1136,7 +1134,7 @@ function SupervisorWorkspace({ profile, plannedRows, onRefresh, onLogout, onPlan
       <section className="stats"><article><CheckCircle2 size={19} /><span>Validated points</span><strong>{available.filter((row) => row.validation_status === 'validated').length}</strong></article><article><MapPin size={19} /><span>Planted</span><strong>{available.filter((row) => row.validation_status === 'planted').length}</strong></article><article><Camera size={19} /><span>Photos</span><strong>{available.filter((row) => row.is_planted && row.photo_url).length}</strong></article></section>
       {message && <div className="notice">{message}</div>}
       <section className="workspace">
-      <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} selectedId={selectedId} onSelect={setSelectedId} onMapClick={() => {}} /><div className="limitBadge">الأخضر: معتمد · الأزرق: تمت زراعته</div></div>
+      <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} selectedId={selectedId} onSelect={setSelectedId} onMapClick={() => {}} /><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
       <section className="records" style={{ padding: 20 }}>
         <div className="recordsHeader"><div><h2>Validated planting points</h2><span>Only engineer-approved points are shown.</span></div></div>
         <label style={{ marginTop: 14 }}>Point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{available.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} - {row.validation_status}</option>)}</select></label>
@@ -1152,6 +1150,38 @@ function SupervisorWorkspace({ profile, plannedRows, onRefresh, onLogout, onPlan
       </section>
       <section className="records" style={{ marginTop: 16 }}><div className="recordsHeader"><h2>Point list</h2><span>{available.length} points</span></div><div className="tableWrap"><table><thead><tr><th>ID</th><th>City</th><th>District</th><th>Status</th></tr></thead><tbody>{available.slice(0, 500).map((row) => <tr key={row.id} onClick={() => setSelectedId(row.id)}><td>{row.id}</td><td>{row.city || '-'}</td><td>{row.district || '-'}</td><td>{row.validation_status}</td></tr>)}</tbody></table></div></section>
     </main>
+  );
+}
+
+function WorkflowQueue({ plannedRows, technicians, onAssign, onRefresh, busy }) {
+  const [selectedId, setSelectedId] = useState('');
+  const [assignedTo, setAssignedTo] = useState('');
+  const readyRows = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status) && !row.deleted_at);
+  const selected = readyRows.find((row) => row.id === selectedId) || null;
+
+  useEffect(() => {
+    if (!selected && readyRows[0]) setSelectedId(readyRows[0].id);
+  }, [readyRows, selected]);
+
+  useEffect(() => {
+    setAssignedTo(selected?.assigned_to || '');
+  }, [selectedId, selected?.assigned_to]);
+
+  async function assign() {
+    if (!selected || !assignedTo || selected.validation_status !== 'validated') return;
+    await onAssign(selected.id, assignedTo);
+  }
+
+  return (
+    <section className="records workflowQueue">
+      <div className="recordsHeader"><div><h2>Validation & assignment</h2><span>اعتماد النقاط ثم إرسالها للفني</span></div><button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={17} /> Refresh</button></div>
+      <div className="fieldGrid workflowControls">
+        <label>Validated point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{readyRows.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} · {row.city || '-'} · {row.district || '-'}</option>)}</select></label>
+        <label>Technician<select value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>
+        <button className="save" type="button" onClick={assign} disabled={busy || !selected || !assignedTo || selected.validation_status !== 'validated'}>Send to technician</button>
+      </div>
+      <div className="tableWrap"><table><thead><tr><th>ID</th><th>City</th><th>District</th><th>Status</th><th>Assigned to</th></tr></thead><tbody>{readyRows.slice(0, 200).map((row) => <tr key={row.id} onClick={() => setSelectedId(row.id)}><td>{row.id}</td><td>{row.city || '-'}</td><td>{row.district || '-'}</td><td>{row.validation_status}</td><td>{row.assigned_to || '-'}</td></tr>)}{!readyRows.length && <tr><td colSpan="5" className="empty">No validated points yet.</td></tr>}</tbody></table></div>
+    </section>
   );
 }
 
@@ -1238,6 +1268,11 @@ function App() {
     };
   }, [records]);
 
+  const technicianOptions = useMemo(
+    () => [...new Set(Object.values(records).flat().map((row) => row.tech_name).filter(Boolean))].sort(),
+    [records],
+  );
+
   useEffect(() => {
     if (profile) {
       loadAll();
@@ -1256,10 +1291,6 @@ function App() {
         .eq('id', data.session.user.id)
         .single();
       if (!mounted || !account?.active) return;
-      if (['engineer', 'supervisor'].includes(account.role)) {
-        await supabase.auth.signOut();
-        return;
-      }
       const nextProfile = {
         username: account.username,
         techName: account.display_name || account.username,
@@ -1324,10 +1355,6 @@ function App() {
       await supabase.auth.signOut();
       throw new Error('هذا المستخدم غير مفعّل.');
     }
-    if (['engineer', 'supervisor'].includes(account.role)) {
-      await supabase.auth.signOut();
-      throw new Error('هذا المستخدم معطّل حاليًا.');
-    }
 
     const nextProfile = {
       username: account.username,
@@ -1391,11 +1418,13 @@ function App() {
     if (!hasSupabaseConfig || !supabase) throw new Error('إعدادات Supabase غير موجودة.');
     setBusy(true);
     try {
+      const batchId = `KMZ-${new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14)}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
       const rows = points.map((point) => ({
         ...point,
         city: metadata.city,
         district: resolveDistrict(metadata.district, metadata.city, records) || null,
         created_by: profile.username || profile.techName,
+        batch_id: batchId,
         validation_status: 'pending',
       }));
       const { error } = await supabase.from('planned_poles').insert(rows);
@@ -1417,10 +1446,24 @@ function App() {
         p_longitude: changes.longitude ?? row.longitude,
         p_status: changes.status,
         p_notes: changes.notes || null,
+        p_assigned_to: changes.assignedTo || null,
       });
       if (error) throw error;
       setPlannedRows((currentRows) => currentRows.map((item) => item.id === row.id ? data : item));
       return data;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function assignPlannedPole(id, technician) {
+    if (!supabase) throw new Error('إعدادات Supabase غير موجودة.');
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc('assign_planned_poles', { p_ids: [id], p_technician: technician });
+      if (error) throw error;
+      setPlannedRows((currentRows) => currentRows.map((item) => item.id === id ? { ...item, assigned_to: technician, assigned_at: new Date().toISOString() } : item));
+      setMessage('تم إرسال النقطة إلى الفني.');
     } finally {
       setBusy(false);
     }
@@ -1788,6 +1831,18 @@ function App() {
     return <DesignWorkspace profile={profile} plannedRows={plannedRows} plantingRows={records.column_checks} onUpload={uploadPlannedPoints} onRefresh={loadAll} onLogout={changeProfile} busy={busy} />;
   }
 
+  if (profile.role === 'engineer') {
+    return <EngineerWorkspace profile={profile} plannedRows={plannedRows} technicians={technicianOptions} onRefresh={loadAll} onLogout={changeProfile} onValidate={validatePlannedPole} onAdd={addPlannedPole} busy={busy} />;
+  }
+
+  if (profile.role === 'supervisor') {
+    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} busy={busy} />;
+  }
+
+  if (profile.role === 'tech' && profile.username) {
+    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} busy={busy} />;
+  }
+
   return (
     <main className={`app ${isAdmin ? 'adminMode' : ''} ${isAdmin && adminPage === 'dashboard' ? 'dashboardMode' : ''}`}>
       <header className="topbar">
@@ -1895,6 +1950,8 @@ function App() {
           </label>
         </section>
       )}
+
+      {isAdmin && adminPage === 'data' && <WorkflowQueue plannedRows={plannedRows} technicians={technicianOptions} onAssign={assignPlannedPole} onRefresh={loadAll} busy={busy} />}
 
       {(!isAdmin || adminPage !== 'dashboard') && <nav className="tabs" aria-label="Survey sections">
         {(isTechnician ? Object.entries(resources).filter(([key]) => key === 'column_checks') : Object.entries(resources)).map(([key, item]) => (
