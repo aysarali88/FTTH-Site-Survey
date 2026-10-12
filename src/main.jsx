@@ -740,6 +740,7 @@ function MapLayers() {
     <LayersControl position="topright">
       <LayersControl.BaseLayer checked name="Satellite">
         <TileLayer
+          className="satelliteTiles"
           attribution='Imagery &copy; <a href="https://www.esri.com/">Esri</a>'
           maxZoom={22}
           maxNativeZoom={19}
