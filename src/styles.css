@@ -1845,6 +1845,7 @@ td {
     bottom: 12px;
     left: 12px;
     max-height: calc(100dvh - 24px);
+    position: fixed;
     right: 12px;
     transform: translateY(105%);
     z-index: 1200;

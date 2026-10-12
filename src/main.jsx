@@ -1103,7 +1103,7 @@ function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLog
       </button>
       <section className="workspace">
         <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} selectedId={selectedId} onSelect={setSelectedId} onMapClick={handleMapClick} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">{addMode ? 'اضغط على الخريطة لإضافة نقطة' : 'اضغط على نقطة ثم اضغط على الخريطة لتحريكها'}</div></div>
-        <section id="engineer-controls" className={`panel engineerControls ${controlsOpen ? 'open' : ''}`} style={{ position: 'relative' }}>
+        <section id="engineer-controls" className={`panel engineerControls ${controlsOpen ? 'open' : ''}`}>
           <div className="panelHeader"><div><p>Engineer review</p><h2>Validation queue</h2><span className="autoId">{plannedRows.length} planned points</span></div><Target color="#2563eb" /></div>
           <div className="fieldGrid"><label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label><label>District<input value={district} onChange={(event) => setDistrict(event.target.value)} /></label></div>
           <label style={{ marginTop: 14 }}>Point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{plannedRows.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} - {row.validation_status}</option>)}</select></label>
