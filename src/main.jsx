@@ -1596,7 +1596,7 @@ function App() {
         .order('created_at', { ascending: false })
         .limit(5000);
       if (plannedError && plannedError.code !== '42P01') throw plannedError;
-      if (profile?.username && ['admin', 'design', 'engineer'].includes(profile.role)) {
+      if (['design', 'engineer'].includes(profile?.role) || (profile?.role === 'admin' && profile?.username)) {
         const { data: users, error: usersError } = await supabase
           .from('user_profiles')
           .select('username, role, active')
