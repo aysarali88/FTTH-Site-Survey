@@ -24,7 +24,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { CircleMarker, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { CircleMarker, LayersControl, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
@@ -720,16 +720,41 @@ function MapResizeSync({ expanded }) {
   useEffect(() => {
     const resize = () => map.invalidateSize({ animate: false });
     resize();
-    const first = window.setTimeout(resize, 80);
-    const second = window.setTimeout(resize, 250);
+    const timers = [80, 250, 600].map((delay) => window.setTimeout(resize, delay));
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(resize) : null;
+    observer?.observe(map.getContainer());
+    window.addEventListener('resize', resize);
 
     return () => {
-      window.clearTimeout(first);
-      window.clearTimeout(second);
+      timers.forEach((timer) => window.clearTimeout(timer));
+      observer?.disconnect();
+      window.removeEventListener('resize', resize);
     };
   }, [map, expanded]);
 
   return null;
+}
+
+function MapLayers() {
+  return (
+    <LayersControl position="topright">
+      <LayersControl.BaseLayer checked name="Satellite">
+        <TileLayer
+          attribution='Imagery &copy; <a href="https://www.esri.com/">Esri</a>'
+          maxZoom={22}
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+        />
+      </LayersControl.BaseLayer>
+      <LayersControl.BaseLayer name="Street map">
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          maxZoom={22}
+          maxNativeZoom={19}
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+      </LayersControl.BaseLayer>
+    </LayersControl>
+  );
 }
 
 function SurveyMarkers({ groupedRecords, onDelete, canDelete }) {
@@ -909,7 +934,8 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
           <div className="dashboardPanelHead"><div><h3>Planting map</h3><span>{mapRows.length}{filteredRows.length > MAX_MAP_MARKERS ? ` of ${filteredRows.length}` : ''} points shown</span></div><MapPinned size={20} /></div>
           <div className="dashboardMapWrap">
             <MapContainer center={mapCenter} zoom={12} maxZoom={22} scrollWheelZoom className="dashboardMap" zoomControl>
-              <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' maxZoom={22} maxNativeZoom={19} url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              <MapLayers />
+              <MapResizeSync expanded={false} />
               <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} onDelete={onDelete} canDelete />
             </MapContainer>
           </div>
@@ -1087,7 +1113,8 @@ function EngineerMap({ rows, selectedId, onSelect, onMapClick, onMovePoint, addM
   const center = first ? [Number(first.latitude), Number(first.longitude)] : [defaultLocation.latitude, defaultLocation.longitude];
   return (
     <MapContainer center={center} zoom={14} maxZoom={22} scrollWheelZoom className="map" zoomControl>
-      <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' maxZoom={22} maxNativeZoom={19} url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      <MapLayers />
+      <MapResizeSync expanded={false} />
       <EngineerMapClickHandler enabled={addMode} onMapClick={onMapClick} />
       {rows.map((row) => {
         const statusColor = row.validation_status === 'validated' ? '#2563eb' : row.validation_status === 'planted' ? '#16a34a' : row.validation_status === 'rejected' ? '#dc2626' : '#f59e0b';
@@ -1323,12 +1350,7 @@ function LegacyTechnicianWorkspace({ assignments, records, onAdd, busy }) {
           zoomControl
           className="map"
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            maxZoom={22}
-            maxNativeZoom={19}
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <MapLayers />
           <MapCenterSync value={location} onChange={setLocation} />
           <MapResizeSync expanded={false} />
           <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} />
@@ -2535,12 +2557,7 @@ function App() {
             rotateControl={{ closeOnZeroBearing: false, position: 'topright' }}
             bearing={0}
           >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              maxZoom={22}
-              maxNativeZoom={19}
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
+            <MapLayers />
             <MapCenterSync value={form} onChange={setLocation} />
             <MapResizeSync expanded={mapExpanded} />
             <FastSurveyMarkers groupedRecords={mapRecords} onDelete={deleteRecord} canDelete />
