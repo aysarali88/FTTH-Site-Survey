@@ -1363,6 +1363,7 @@ function App() {
   const [adminFilters, setAdminFilters] = useState({ district: '', techName: '', type: 'all' });
   const [adminPage, setAdminPage] = useState('data');
   const [managedUsers, setManagedUsers] = useState([]);
+  const [technicianUsers, setTechnicianUsers] = useState([]);
   const [usersBusy, setUsersBusy] = useState(false);
   const [usersError, setUsersError] = useState('');
 
@@ -1435,8 +1436,11 @@ function App() {
   }, [records]);
 
   const technicianOptions = useMemo(
-    () => [...new Set(Object.values(records).flat().map((row) => row.tech_name).filter(Boolean))].sort(),
-    [records],
+    () => [...new Set([
+      ...technicianUsers,
+      ...Object.values(records).flat().map((row) => row.tech_name).filter(Boolean),
+    ])].sort(),
+    [records, technicianUsers],
   );
 
   useEffect(() => {
@@ -1592,6 +1596,18 @@ function App() {
         .order('created_at', { ascending: false })
         .limit(5000);
       if (plannedError && plannedError.code !== '42P01') throw plannedError;
+      if (profile?.username && ['admin', 'design', 'engineer'].includes(profile.role)) {
+        const { data: users, error: usersError } = await supabase
+          .from('user_profiles')
+          .select('username, role, active')
+          .eq('role', 'tech')
+          .eq('active', true)
+          .order('username', { ascending: true });
+        if (usersError) throw usersError;
+        setTechnicianUsers((users || []).map((user) => user.username).filter(Boolean));
+      } else {
+        setTechnicianUsers([]);
+      }
       const districtResult = canonicalizeDistricts(nextRecords);
       for (const change of districtResult.changes) {
         const update = { district: change.district };
