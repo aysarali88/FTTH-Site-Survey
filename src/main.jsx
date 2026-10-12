@@ -1157,7 +1157,7 @@ function SupervisorWorkspace({ profile, plannedRows, onRefresh, onLogout, onPlan
 
 function App() {
   const [profile, setProfile] = useState(readSavedProfile);
-  const [active, setActive] = useState('buildings');
+  const [active, setActive] = useState(() => (readSavedProfile()?.role === 'tech' ? 'column_checks' : 'buildings'));
   const [forms, setForms] = useState(() => makeEmptyForms(readSavedProfile()));
   const [records, setRecords] = useState({ buildings: [], poles: [], column_checks: [] });
   const [plannedRows, setPlannedRows] = useState([]);
@@ -1171,6 +1171,7 @@ function App() {
   const [adminPage, setAdminPage] = useState('data');
 
   const isAdmin = profile?.role === 'admin';
+  const isTechnician = profile?.role === 'tech';
   const isStaffRole = profile?.role === 'design';
   const current = resources[active];
   const form = forms[active];
@@ -1297,6 +1298,7 @@ function App() {
       localStorage.setItem(PROFILE_KEY, JSON.stringify(nextProfile));
       setProfile(nextProfile);
       setForms(makeEmptyForms(nextProfile));
+      setActive('column_checks');
       setMessage('تم تسجيل دخول الفني.');
       return;
     }
@@ -1344,6 +1346,7 @@ function App() {
     if (supabase) await supabase.auth.signOut();
     localStorage.removeItem(PROFILE_KEY);
     setProfile(null);
+    setActive('buildings');
     setMessage('');
   }
 
@@ -1894,7 +1897,7 @@ function App() {
       )}
 
       {(!isAdmin || adminPage !== 'dashboard') && <nav className="tabs" aria-label="Survey sections">
-        {Object.entries(resources).map(([key, item]) => (
+        {(isTechnician ? Object.entries(resources).filter(([key]) => key === 'column_checks') : Object.entries(resources)).map(([key, item]) => (
           <button
             key={key}
             type="button"
