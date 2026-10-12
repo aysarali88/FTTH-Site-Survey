@@ -1841,17 +1841,21 @@ td {
     font-weight: 700;
   }
 
-  .engineerControls {
+  .engineerControls,
+  .supervisorControls {
     bottom: 12px;
+    display: block !important;
     left: 12px;
     max-height: calc(100dvh - 24px);
+    margin: 0;
     position: fixed;
     right: 12px;
     transform: translateY(105%);
     z-index: 1200;
   }
 
-  .engineerControls.open {
+  .engineerControls.open,
+  .supervisorControls.open {
     transform: translateY(0);
   }
 
