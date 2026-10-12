@@ -520,6 +520,44 @@ button:disabled {
   padding: 2px 8px;
 }
 
+.userManagement {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.userCreateForm {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 18px;
+  padding: 16px;
+}
+
+.userFormTitle {
+  align-items: center;
+  color: #0f172a;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.userCreateForm .save {
+  margin-top: 14px;
+  max-width: 220px;
+}
+
+.userTableWrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.compactButton {
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
 .workspace {
   display: grid;
   gap: 16px;

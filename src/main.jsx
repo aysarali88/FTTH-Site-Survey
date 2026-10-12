@@ -19,6 +19,7 @@ import {
   Target,
   Trash2,
   Upload,
+  UserCog,
   UserRound,
   X,
 } from 'lucide-react';
@@ -1185,6 +1186,51 @@ function WorkflowQueue({ plannedRows, technicians, onAssign, onRefresh, busy }) 
   );
 }
 
+function UserManagement({ users, loading, error, onRefresh, onCreate, onToggle }) {
+  const [form, setForm] = useState({
+    username: '',
+    displayName: '',
+    password: '',
+    role: 'tech',
+    city: '',
+    district: '',
+  });
+
+  async function submit(event) {
+    event.preventDefault();
+    await onCreate(form);
+    setForm({ username: '', displayName: '', password: '', role: 'tech', city: '', district: '' });
+  }
+
+  return (
+    <section className="userManagement">
+      <div className="recordsHeader">
+        <div><h2>User management</h2><span>Create accounts and control application permissions.</span></div>
+        <button className="ghost" type="button" onClick={onRefresh} disabled={loading}><RefreshCcw size={17} /> Refresh</button>
+      </div>
+      {error && <div className="notice">{error}</div>}
+      <form className="userCreateForm" onSubmit={submit}>
+        <div className="userFormTitle"><UserCog size={20} /><strong>Add user</strong></div>
+        <div className="fieldGrid">
+          <label>Username<input required value={form.username} onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))} placeholder="hamza" autoComplete="off" /></label>
+          <label>Display name<input value={form.displayName} onChange={(event) => setForm((prev) => ({ ...prev, displayName: event.target.value }))} placeholder="Hamza" /></label>
+          <label>Password<input required minLength="6" type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} autoComplete="new-password" /></label>
+          <label>Role<select value={form.role} onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value }))}>
+            <option value="tech">Technician</option><option value="design">Designer</option><option value="engineer">Engineer</option><option value="supervisor">Supervisor</option><option value="admin">Admin</option>
+          </select></label>
+          <label>City<select value={form.city} onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value, district: '' }))}><option value="">Not assigned</option><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label>
+          <label>District<input value={form.district} onChange={(event) => setForm((prev) => ({ ...prev, district: event.target.value }))} placeholder="Optional district" /></label>
+        </div>
+        <button className="save" type="submit" disabled={loading}>Create user</button>
+      </form>
+      <div className="tableWrap userTableWrap"><table><thead><tr><th>Username</th><th>Display name</th><th>Role</th><th>City</th><th>District</th><th>Status</th><th>Action</th></tr></thead><tbody>
+        {users.map((user) => <tr key={user.id}><td>{user.username}</td><td>{user.display_name || '-'}</td><td>{roleLabel(user.role)}</td><td>{user.city || '-'}</td><td>{user.district || '-'}</td><td><span className={`statusPill ${user.active ? 'statusGood' : 'statusBad'}`}>{user.active ? 'Active' : 'Disabled'}</span></td><td><button className="ghost compactButton" type="button" onClick={() => onToggle(user)} disabled={loading}>{user.active ? 'Disable' : 'Enable'}</button></td></tr>)}
+        {!users.length && <tr><td colSpan="7" className="empty">No managed users yet.</td></tr>}
+      </tbody></table></div>
+    </section>
+  );
+}
+
 function App() {
   const [profile, setProfile] = useState(readSavedProfile);
   const [active, setActive] = useState(() => (readSavedProfile()?.role === 'tech' ? 'column_checks' : 'buildings'));
@@ -1199,6 +1245,9 @@ function App() {
   const [mapExpanded, setMapExpanded] = useState(false);
   const [adminFilters, setAdminFilters] = useState({ district: '', techName: '', type: 'all' });
   const [adminPage, setAdminPage] = useState('data');
+  const [managedUsers, setManagedUsers] = useState([]);
+  const [usersBusy, setUsersBusy] = useState(false);
+  const [usersError, setUsersError] = useState('');
 
   const isAdmin = profile?.role === 'admin';
   const isTechnician = profile?.role === 'tech';
@@ -1376,6 +1425,34 @@ function App() {
     setActive('buildings');
     setMessage('');
   }
+
+  async function manageUsers(action, payload = {}) {
+    if (!supabase) throw new Error('إعدادات Supabase غير موجودة.');
+    setUsersBusy(true);
+    setUsersError('');
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-manage-user', { body: { action, ...payload } });
+      if (error) throw error;
+      if (action === 'list') setManagedUsers(data?.users || []);
+      else if (action === 'create') {
+        setMessage('تم إنشاء المستخدم بنجاح.');
+        await manageUsers('list');
+      } else if (action === 'toggle') {
+        setMessage('تم تحديث صلاحية المستخدم.');
+        await manageUsers('list');
+      }
+    } catch (error) {
+      const details = error?.context?.error || error.message || 'تعذر تنفيذ العملية.';
+      setUsersError(typeof details === 'string' ? details : 'تعذر تنفيذ العملية.');
+      throw error;
+    } finally {
+      setUsersBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (isAdmin && adminPage === 'users' && supabase) manageUsers('list').catch(() => {});
+  }, [isAdmin, adminPage]);
 
   async function loadAll() {
     if (!hasSupabaseConfig) {
@@ -1884,7 +1961,7 @@ function App() {
         </div>
       </header>
 
-      {(!isAdmin || adminPage !== 'dashboard') && <section className="stats">
+      {(!isAdmin || adminPage === 'data') && <section className="stats">
         <article>
           <ClipboardList size={19} />
           <span>Buildings</span>
@@ -1914,6 +1991,9 @@ function App() {
             Photos
             <span>{visiblePhotos.length}</span>
           </button>
+          <button type="button" className={adminPage === 'users' ? 'active' : ''} onClick={() => setAdminPage('users')}>
+            Users
+          </button>
         </section>
       )}
 
@@ -1921,7 +2001,18 @@ function App() {
         <PolePlantingDashboard records={records.column_checks} onRefresh={loadAll} busy={busy} onDelete={deleteRecord} />
       )}
 
-      {(!isAdmin || adminPage !== 'dashboard') && isAdmin && (
+      {isAdmin && adminPage === 'users' && (
+        <UserManagement
+          users={managedUsers}
+          loading={usersBusy}
+          error={usersError || (!supabase ? 'إعدادات Supabase غير موجودة.' : '')}
+          onRefresh={() => manageUsers('list').catch(() => {})}
+          onCreate={(user) => manageUsers('create', { user })}
+          onToggle={(user) => manageUsers('toggle', { id: user.id, active: !user.active })}
+        />
+      )}
+
+      {isAdmin && adminPage === 'data' && (
         <section className="adminFilters">
           <label>
             District
@@ -1953,7 +2044,7 @@ function App() {
 
       {isAdmin && adminPage === 'data' && <WorkflowQueue plannedRows={plannedRows} technicians={technicianOptions} onAssign={assignPlannedPole} onRefresh={loadAll} busy={busy} />}
 
-      {(!isAdmin || adminPage !== 'dashboard') && <nav className="tabs" aria-label="Survey sections">
+      {(!isAdmin || adminPage === 'data') && <nav className="tabs" aria-label="Survey sections">
         {(isTechnician ? Object.entries(resources).filter(([key]) => key === 'column_checks') : Object.entries(resources)).map(([key, item]) => (
           <button
             key={key}
@@ -1971,9 +2062,9 @@ function App() {
         ))}
       </nav>}
 
-      {message && (!isAdmin || adminPage !== 'dashboard') && <div className="notice">{message}</div>}
+      {message && (!isAdmin || adminPage === 'data') && <div className="notice">{message}</div>}
 
-      {(!isAdmin || adminPage !== 'dashboard') && <section className="workspace">
+      {(!isAdmin || adminPage === 'data') && <section className="workspace">
         <div className={`mapShell ${mapExpanded ? 'expandedMap' : ''}`}>
           <button
             className="mapExpandButton"
