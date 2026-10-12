@@ -622,6 +622,20 @@ button:disabled {
   z-index: 540;
 }
 
+.mapMoveFinishButton {
+  background: #ffffff;
+  border: 1px solid #2563eb;
+  border-radius: 8px;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.22);
+  color: #1d4ed8;
+  left: 16px;
+  min-height: 42px;
+  padding: 10px 14px;
+  position: absolute;
+  top: 18px;
+  z-index: 545;
+}
+
 .logoutButton {
   background: #ffffff;
   border: 1px solid #dbe4ef;
