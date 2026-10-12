@@ -24,7 +24,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { CircleMarker, MapContainer, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { CircleMarker, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
@@ -1056,7 +1056,16 @@ function EngineerMapClickHandler({ onMapClick }) {
   return null;
 }
 
-function EngineerMap({ rows, selectedId, onSelect, onMapClick }) {
+function engineerPointIcon(color, selected) {
+  return L.divIcon({
+    className: 'engineerPointIcon',
+    html: `<span class="engineerPointDot${selected ? ' selected' : ''}" style="--point-color:${color}"></span>`,
+    iconSize: [selected ? 24 : 18, selected ? 24 : 18],
+    iconAnchor: [selected ? 12 : 9, selected ? 12 : 9],
+  });
+}
+
+function EngineerMap({ rows, selectedId, onSelect, onMapClick, onMovePoint }) {
   const first = rows.find((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)));
   const center = first ? [Number(first.latitude), Number(first.longitude)] : [defaultLocation.latitude, defaultLocation.longitude];
   return (
@@ -1065,7 +1074,21 @@ function EngineerMap({ rows, selectedId, onSelect, onMapClick }) {
       <EngineerMapClickHandler onMapClick={onMapClick} />
       {rows.map((row) => {
         const statusColor = row.validation_status === 'validated' ? '#2563eb' : row.validation_status === 'planted' ? '#16a34a' : row.validation_status === 'rejected' ? '#dc2626' : '#f59e0b';
-        return <CircleMarker key={row.id} center={[Number(row.latitude), Number(row.longitude)]} radius={row.id === selectedId ? 11 : 7} pathOptions={{ color: statusColor, fillColor: statusColor, fillOpacity: 0.85, weight: row.id === selectedId ? 4 : 2 }} eventHandlers={{ click: () => onSelect(row.id) }}>
+        const selected = row.id === selectedId;
+        return <Marker
+          key={row.id}
+          position={[Number(row.latitude), Number(row.longitude)]}
+          icon={engineerPointIcon(statusColor, selected)}
+          draggable={Boolean(onMovePoint) && selected}
+          eventHandlers={{
+            click: () => onSelect(row.id),
+            dragstart: () => onSelect(row.id),
+            dragend: (event) => {
+              const position = event.target.getLatLng();
+              onMovePoint?.(row, position);
+            },
+          }}
+        >
           <Popup>
             <div className="mapPointPopup" dir="rtl">
               <strong>{row.point_name || row.id}</strong>
@@ -1076,13 +1099,13 @@ function EngineerMap({ rows, selectedId, onSelect, onMapClick }) {
               <span dir="ltr"><b>Coordinates:</b> {row.latitude}, {row.longitude}</span>
             </div>
           </Popup>
-        </CircleMarker>;
+        </Marker>;
       })}
     </MapContainer>
   );
 }
 
-function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLogout, onValidate, onAdd, busy }) {
+function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLogout, onValidate, onMove, onDelete, onAdd, busy }) {
   const [selectedId, setSelectedId] = useState(plannedRows[0]?.id || '');
   const [status, setStatus] = useState('validated');
   const [rememberedAssignedTo, setRememberedAssignedTo] = useState(() => {
@@ -1134,23 +1157,38 @@ function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLog
   }
 
   async function handleMapClick(latlng) {
-    if (addMode) {
-      try {
-        const created = await onAdd({ latitude: latlng.lat, longitude: latlng.lng, city, district });
-        setSelectedId(created.id);
-        setAddMode(false);
-        setMessage('تمت إضافة نقطة جديدة بحالة Pending.');
-      } catch (error) {
-        setMessage(`تعذر إضافة النقطة: ${error.message}`);
-      }
-      return;
-    }
-    if (!selected) return;
+    if (!addMode) return;
     try {
-      await onValidate(selected, { status, notes, assignedTo, latitude: latlng.lat, longitude: latlng.lng });
+      const created = await onAdd({ latitude: latlng.lat, longitude: latlng.lng, city, district });
+      setSelectedId(created.id);
+      setAddMode(false);
+      setMessage('تمت إضافة نقطة جديدة بحالة Pending.');
+    } catch (error) {
+      setMessage(`تعذر إضافة النقطة: ${error.message}`);
+    }
+  }
+
+  async function handleMovePoint(row, position) {
+    setSelectedId(row.id);
+    setControlsOpen(true);
+    setMessage('');
+    try {
+      await onMove(row, { latitude: position.lat, longitude: position.lng });
       setMessage('تم تحديث موقع النقطة وحفظه.');
     } catch (error) {
-      setMessage(`تعذر تحريك النقطة: ${error.message}`);
+      setMessage(`تعذر تحديث الموقع: ${error.message}`);
+    }
+  }
+
+  async function deleteSelected() {
+    if (!selected || selected.validation_status === 'planted') return;
+    if (!window.confirm(`Delete ${selected.point_name || selected.id}?`)) return;
+    setMessage('');
+    try {
+      await onDelete(selected);
+      setMessage('تم حذف النقطة من قائمة العمل.');
+    } catch (error) {
+      setMessage(`تعذر حذف النقطة: ${error.message}`);
     }
   }
 
@@ -1165,10 +1203,10 @@ function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLog
         <Menu size={24} />
       </button>
       <section className="workspace">
-        <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div></div>
+        <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} onMovePoint={handleMovePoint} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div></div>
         <section id="engineer-controls" className={`panel engineerControls ${controlsOpen ? 'open' : ''}`}>
           <div className="panelHeader"><div><p>Engineer review</p><h2>Validation queue</h2><span className="autoId">{plannedRows.length} planned points</span></div><Target color="#2563eb" /></div>
-          {selected && <><div className="pointDetails"><div><span>Point</span><strong>{selected.point_name || selected.id}</strong></div><div><span>Area / City</span><strong>{selected.city || '-'}</strong></div><div><span>District</span><strong>{selected.district || '-'}</strong></div><div><span>Status</span><strong>{selected.validation_status || '-'}</strong></div></div><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label>{status === 'validated' && <label>Assign technician<select value={assignedTo} onChange={(event) => rememberTechnician(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>}<label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy || (status === 'validated' && !assignedTo)}>Save decision</button></>}
+          {selected && <><div className="pointDetails"><div><span>Point</span><strong>{selected.point_name || selected.id}</strong></div><div><span>Area / City</span><strong>{selected.city || '-'}</strong></div><div><span>District</span><strong>{selected.district || '-'}</strong></div><div><span>Status</span><strong>{selected.validation_status || '-'}</strong></div></div><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label>{status === 'validated' && <label>Assign technician<select value={assignedTo} onChange={(event) => rememberTechnician(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>}<label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy || (status === 'validated' && !assignedTo)}>Save decision</button><button className="dangerMini engineerDeleteButton" type="button" onClick={deleteSelected} disabled={busy || selected.validation_status === 'planted'}><Trash2 size={17} /> Delete point</button></>}
           {addMode && <div className="fieldGrid" style={{ marginBottom: 14 }}><label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label><label>District<input value={district} onChange={(event) => setDistrict(event.target.value)} /></label></div>}
           <button className="ghost" type="button" style={{ width: '100%', marginTop: 12 }} onClick={() => setAddMode((value) => !value)}>{addMode ? 'Cancel add point' : 'Add point on map'}</button>
         </section>
@@ -1550,6 +1588,7 @@ function App() {
       const { data: planned, error: plannedError } = await supabase
         .from('planned_poles')
         .select('*')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(5000);
       if (plannedError && plannedError.code !== '42P01') throw plannedError;
@@ -1625,6 +1664,35 @@ function App() {
       if (error) throw error;
       setPlannedRows((currentRows) => currentRows.map((item) => item.id === row.id ? data : item));
       return data;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function movePlannedPole(row, location) {
+    if (!supabase) throw new Error('إعدادات Supabase غير موجودة.');
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.rpc('engineer_move_planned_pole', {
+        p_id: row.id,
+        p_latitude: location.latitude,
+        p_longitude: location.longitude,
+      });
+      if (error) throw error;
+      setPlannedRows((currentRows) => currentRows.map((item) => item.id === row.id ? data : item));
+      return data;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deletePlannedPole(row) {
+    if (!supabase) throw new Error('إعدادات Supabase غير موجودة.');
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc('engineer_delete_planned_pole', { p_id: row.id });
+      if (error) throw error;
+      setPlannedRows((currentRows) => currentRows.filter((item) => item.id !== row.id));
     } finally {
       setBusy(false);
     }
@@ -2006,7 +2074,7 @@ function App() {
   }
 
   if (profile.role === 'engineer') {
-    return <EngineerWorkspace profile={profile} plannedRows={plannedRows} technicians={technicianOptions} onRefresh={loadAll} onLogout={changeProfile} onValidate={validatePlannedPole} onAdd={addPlannedPole} busy={busy} />;
+    return <EngineerWorkspace profile={profile} plannedRows={plannedRows} technicians={technicianOptions} onRefresh={loadAll} onLogout={changeProfile} onValidate={validatePlannedPole} onMove={movePlannedPole} onDelete={deletePlannedPole} onAdd={addPlannedPole} busy={busy} />;
   }
 
   if (profile.role === 'supervisor') {
