@@ -2277,18 +2277,11 @@ function App() {
 
 function LoginPage({ onSave }) {
   const [username, setUsername] = useState('');
-  const [city, setCity] = useState('');
-  const [district, setDistrict] = useState('');
+  const [password, setPassword] = useState('');
   const [adminMode, setAdminMode] = useState(false);
   const [adminPin, setAdminPin] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const districtOptions = CITY_DISTRICTS[city] || [];
-
-  function changeCity(value) {
-    setCity(value);
-    setDistrict('');
-  }
 
   async function submit(event) {
     event.preventDefault();
@@ -2301,13 +2294,13 @@ function LoginPage({ onSave }) {
       await onSave({ username: username.trim() || 'Admin', legacyAdmin: true });
       return;
     }
-    if (!username.trim() || !city.trim() || !district.trim()) {
-      setError('أدخل اسم الفني والمدينة واسم المنطقة.');
+    if (!username.trim() || !password.trim()) {
+      setError('أدخل اسم المستخدم وكلمة المرور.');
       return;
     }
     setLoading(true);
     try {
-      await onSave({ username, city, district, legacyTech: true });
+      await onSave({ username, password });
     } catch (submitError) {
       setError(submitError.message === 'Invalid login credentials' ? 'اسم المستخدم أو كلمة المرور غير صحيحة.' : `تعذر تسجيل الدخول: ${submitError.message}`);
     } finally {
@@ -2323,7 +2316,7 @@ function LoginPage({ onSave }) {
         </div>
         <p className="eyebrow">Site Survey Pro</p>
         <h1>{adminMode ? 'دخول الأدمن' : 'تسجيل الدخول'}</h1>
-        <p className="loginText">أدخل اسم الفني والمدينة والمنطقة للبدء.</p>
+        <p className="loginText">{adminMode ? 'أدخل رمز الأدمن للمتابعة.' : 'استخدم اسم المستخدم وكلمة المرور الخاصة بك.'}</p>
 
         <label className="check adminSwitch">
           <input type="checkbox" checked={adminMode} onChange={(event) => setAdminMode(event.target.checked)} />
@@ -2331,26 +2324,21 @@ function LoginPage({ onSave }) {
         </label>
 
         <label>
-          اسم الفني
-          <input autoFocus value={username} onChange={(event) => setUsername(event.target.value)} placeholder="اسم الفني" autoComplete="name" />
+          اسم المستخدم
+          <input autoFocus value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Username" autoComplete="username" />
         </label>
-        {!adminMode && <>
+        {!adminMode && (
           <label>
-            المدينة
-            <select value={city} onChange={(event) => changeCity(event.target.value)}>
-              <option value="">اختر المدينة</option>
-              <option value="Misrata">Misrata</option>
-              <option value="Tripoli">Tripoli</option>
-            </select>
+            كلمة المرور
+            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="كلمة المرور" autoComplete="current-password" />
           </label>
+        )}
+        {!adminMode && loginMode === 'staff' && (
           <label>
-            District
-            <select value={district} onChange={(event) => setDistrict(event.target.value)} disabled={!city}>
-              <option value="">اختر المنطقة</option>
-              {districtOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-            </select>
+            كلمة المرور
+            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="كلمة المرور" autoComplete="current-password" />
           </label>
-        </>}
+        )}
         {adminMode && (
           <label>
             رمز الأدمن
@@ -2360,7 +2348,7 @@ function LoginPage({ onSave }) {
 
         {error && <div className="notice">{error}</div>}
 
-        <button className="save" type="submit" disabled={loading || (adminMode ? !adminPin.trim() : !username.trim() || !city.trim() || !district.trim())}>
+        <button className="save" type="submit" disabled={loading || (adminMode ? !adminPin.trim() : !username.trim() || !password.trim())}>
           {loading ? 'جارٍ الدخول...' : 'دخول التطبيق'}
         </button>
       </form>
