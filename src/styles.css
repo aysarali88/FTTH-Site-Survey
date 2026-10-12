@@ -2025,10 +2025,12 @@ td {
     justify-content: center;
     min-height: 48px;
     padding: 0;
-    position: fixed;
-    right: 12px;
-    top: 16px;
-    z-index: 1300;
+    isolation: isolate;
+    position: fixed !important;
+    right: max(12px, env(safe-area-inset-right));
+    top: max(12px, env(safe-area-inset-top));
+    transform: translateZ(0);
+    z-index: 5000 !important;
     width: 48px;
   }
 
