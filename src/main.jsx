@@ -944,7 +944,7 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
   );
 }
 
-function DesignWorkspace({ profile, plannedRows, plantingRows, onUpload, onRefresh, onLogout, busy }) {
+function DesignWorkspace({ profile, plannedRows, plantingRows, onUpload, onDeleteBatch, onRefresh, onLogout, busy }) {
   const [city, setCity] = useState(profile.city || 'Misrata');
   const [district, setDistrict] = useState(profile.district || '');
   const [error, setError] = useState('');
@@ -953,6 +953,10 @@ function DesignWorkspace({ profile, plannedRows, plantingRows, onUpload, onRefre
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    if (!city || !district) {
+      setError('اختر المدينة والمنطقة قبل رفع الملف.');
+      return;
+    }
     setError('');
     try {
       const text = await readKmlFromFile(file);
@@ -967,6 +971,26 @@ function DesignWorkspace({ profile, plannedRows, plantingRows, onUpload, onRefre
   const pending = plannedRows.filter((row) => row.validation_status === 'pending').length;
   const validated = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status)).length;
   const previewRows = plannedRows.slice(0, MAX_MAP_MARKERS);
+  const districtOptions = CITY_DISTRICTS[city] || [];
+  const batches = useMemo(() => {
+    const grouped = new Map();
+    plannedRows.forEach((row) => {
+      if (!row.batch_id) return;
+      const current = grouped.get(row.batch_id) || {
+        batchId: row.batch_id,
+        city: row.city || '-',
+        district: row.district || '-',
+        count: 0,
+        hasPlanted: false,
+        latest: row.created_at || '',
+      };
+      current.count += 1;
+      current.hasPlanted = current.hasPlanted || row.validation_status === 'planted' || row.is_planted;
+      if (row.created_at > current.latest) current.latest = row.created_at;
+      grouped.set(row.batch_id, current);
+    });
+    return Array.from(grouped.values()).sort((a, b) => String(b.latest).localeCompare(String(a.latest)));
+  }, [plannedRows]);
 
   return (
     <main className="app adminMode">
@@ -988,15 +1012,20 @@ function DesignWorkspace({ profile, plannedRows, plantingRows, onUpload, onRefre
       <section className="records" style={{ padding: 20, marginBottom: 16 }}>
         <div className="recordsHeader"><div><h2>Upload KMZ plan</h2><span>Files are stored as pending validation points.</span></div></div>
         <div className="fieldGrid" style={{ marginTop: 14 }}>
-          <label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label>
-          <label>District<input value={district} onChange={(event) => setDistrict(event.target.value)} placeholder="Optional district" /></label>
+          <label>City<select value={city} onChange={(event) => { setCity(event.target.value); setDistrict(''); }}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label>
+          <label>District<select required value={district} onChange={(event) => setDistrict(event.target.value)}><option value="">Choose district...</option>{districtOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
         </div>
         <label className="ghost fileButton" style={{ marginTop: 14, display: 'inline-flex' }}>
           <Upload size={18} /> {busy ? 'Uploading...' : 'Choose KMZ / KML'}
-          <input type="file" accept=".kmz,.kml,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" onChange={handleFile} disabled={busy || !city} />
+          <input type="file" accept=".kmz,.kml,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" onChange={handleFile} disabled={busy || !city || !district} />
         </label>
         {error && <div className="notice" style={{ marginTop: 14 }}>{error}</div>}
       </section>
+
+      {!!batches.length && <section className="records designBatchCard" style={{ marginBottom: 16 }}>
+        <div className="recordsHeader"><div><h2>Uploaded areas</h2><span>Delete only a selected uploaded batch.</span></div><span>{batches.length} batches</span></div>
+        <div className="batchList">{batches.map((batch) => <div className="batchRow" key={batch.batchId}><div><strong>{batch.city} · {batch.district}</strong><span>{batch.count} points · {batch.batchId}</span></div><button className="dangerMini" type="button" disabled={busy || batch.hasPlanted} title={batch.hasPlanted ? 'Cannot delete a batch with planted points' : 'Delete batch'} onClick={async () => { if (!window.confirm(`Delete ${batch.count} points from ${batch.city} / ${batch.district}?`)) return; setError(''); try { await onDeleteBatch(batch.batchId); } catch (deleteError) { setError(deleteError.message); } }}><Trash2 size={16} /> Delete</button></div>)}</div>
+      </section>}
 
       {!!plannedRows.length && <section className="records designMapCard" style={{ marginBottom: 16 }}>
         <div className="recordsHeader"><div><h2>Map preview</h2><span>Imported points are shown on the map before validation.</span></div><span>{previewRows.length} / {plannedRows.length} points</span></div>
@@ -1535,6 +1564,24 @@ function App() {
     }
   }
 
+  async function deletePlannedBatch(batchId) {
+    if (!supabase) throw new Error('إعدادات Supabase غير موجودة.');
+    setBusy(true);
+    try {
+      const { data: batchRows, error: readError } = await supabase.from('planned_poles').select('id, validation_status, is_planted').eq('batch_id', batchId);
+      if (readError) throw readError;
+      if ((batchRows || []).some((row) => row.validation_status === 'planted' || row.is_planted)) {
+        throw new Error('لا يمكن حذف دفعة تحتوي نقاطًا تمت زراعتها.');
+      }
+      const { error } = await supabase.from('planned_poles').delete().eq('batch_id', batchId);
+      if (error) throw error;
+      setPlannedRows((currentRows) => currentRows.filter((row) => row.batch_id !== batchId));
+      setMessage('تم حذف الدفعة والمنطقة المرفوعة بنجاح.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function validatePlannedPole(row, changes) {
     if (!supabase) throw new Error('إعدادات Supabase غير موجودة.');
     setBusy(true);
@@ -1927,7 +1974,7 @@ function App() {
   }
 
   if (profile.role === 'design') {
-    return <DesignWorkspace profile={profile} plannedRows={plannedRows} plantingRows={records.column_checks} onUpload={uploadPlannedPoints} onRefresh={loadAll} onLogout={changeProfile} busy={busy} />;
+    return <DesignWorkspace profile={profile} plannedRows={plannedRows} plantingRows={records.column_checks} onUpload={uploadPlannedPoints} onDeleteBatch={deletePlannedBatch} onRefresh={loadAll} onLogout={changeProfile} busy={busy} />;
   }
 
   if (profile.role === 'engineer') {

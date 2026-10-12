@@ -671,6 +671,45 @@ button:disabled {
   min-height: 520px;
 }
 
+.batchList {
+  display: grid;
+  gap: 8px;
+}
+
+.batchRow {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.batchRow > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.batchRow strong,
+.batchRow span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batchRow strong {
+  color: #0f172a;
+}
+
+.batchRow span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .fixedPin {
   color: #dc2626;
   filter: drop-shadow(0 8px 10px rgba(15, 23, 42, 0.35));
@@ -1882,6 +1921,15 @@ td {
   .designPreviewMap .map {
     height: 420px;
     min-height: 420px;
+  }
+
+  .batchRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .batchRow button {
+    width: 100%;
   }
 
   .adminMode .designPreviewMap {
