@@ -1808,15 +1808,15 @@ td {
     box-shadow: 0 14px 30px rgba(15, 23, 42, 0.28);
     color: #ffffff;
     display: inline-flex;
-    gap: 8px;
+    height: 48px;
     justify-content: center;
     min-height: 48px;
-    padding: 0 15px;
+    padding: 0;
     position: fixed;
     right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
+    top: 16px;
     z-index: 1300;
+    width: 48px;
   }
 
   .mobileLogoutButton {

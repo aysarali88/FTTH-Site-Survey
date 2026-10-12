@@ -10,13 +10,13 @@ import {
   Filter,
   LocateFixed,
   LogOut,
+  Menu,
   MapPin,
   MapPinned,
   Minimize2,
   Plus,
   RefreshCcw,
   Search,
-  SlidersHorizontal,
   Target,
   Trash2,
   Upload,
@@ -1097,12 +1097,11 @@ function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLog
       <section className="stats"><article><Target size={19} /><span>Pending</span><strong>{pending.length}</strong></article><article><CheckCircle2 size={19} /><span>Validated</span><strong>{plannedRows.filter((row) => row.validation_status === 'validated').length}</strong></article><article><X size={19} /><span>Rejected</span><strong>{plannedRows.filter((row) => row.validation_status === 'rejected').length}</strong></article></section>
       {message && <div className="notice">{message}</div>}
       <button className="mobileLogoutButton" type="button" onClick={onLogout}><LogOut size={18} /><span>تسجيل الخروج</span></button>
-      <button className="engineerPanelToggle" type="button" onClick={() => setControlsOpen((value) => !value)} aria-expanded={controlsOpen} aria-controls="engineer-controls">
-        <SlidersHorizontal size={19} />
-        <span>{controlsOpen ? 'إخفاء الخيارات' : 'خيارات المهندس'}</span>
+      <button className="engineerPanelToggle" type="button" onClick={() => setControlsOpen((value) => !value)} aria-expanded={controlsOpen} aria-controls="engineer-controls" aria-label={controlsOpen ? 'إخفاء لوحة المهندس' : 'إظهار لوحة المهندس'}>
+        <Menu size={24} />
       </button>
       <section className="workspace">
-        <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} selectedId={selectedId} onSelect={setSelectedId} onMapClick={handleMapClick} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">{addMode ? 'اضغط على الخريطة لإضافة نقطة' : 'اضغط على نقطة ثم اضغط على الخريطة لتحريكها'}</div></div>
+        <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} selectedId={selectedId} onSelect={setSelectedId} onMapClick={handleMapClick} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div></div>
         <section id="engineer-controls" className={`panel engineerControls ${controlsOpen ? 'open' : ''}`}>
           <div className="panelHeader"><div><p>Engineer review</p><h2>Validation queue</h2><span className="autoId">{plannedRows.length} planned points</span></div><Target color="#2563eb" /></div>
           <div className="fieldGrid"><label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label><label>District<input value={district} onChange={(event) => setDistrict(event.target.value)} /></label></div>
