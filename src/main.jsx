@@ -1015,13 +1015,18 @@ function DesignWorkspace({ profile, plannedRows, plantingRows, onUpload, onRefre
   );
 }
 
+function EngineerMapClickHandler({ onMapClick }) {
+  useMapEvents({ click: (event) => onMapClick(event.latlng) });
+  return null;
+}
+
 function EngineerMap({ rows, selectedId, onSelect, onMapClick }) {
   const first = rows.find((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)));
   const center = first ? [Number(first.latitude), Number(first.longitude)] : [defaultLocation.latitude, defaultLocation.longitude];
-  useMapEvents({ click: (event) => onMapClick(event.latlng) });
   return (
     <MapContainer center={center} zoom={14} maxZoom={22} scrollWheelZoom className="map" zoomControl>
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' maxZoom={22} maxNativeZoom={19} url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      <EngineerMapClickHandler onMapClick={onMapClick} />
       {rows.map((row) => {
         const statusColor = row.validation_status === 'validated' ? '#2563eb' : row.validation_status === 'planted' ? '#16a34a' : row.validation_status === 'rejected' ? '#dc2626' : '#f59e0b';
         return <CircleMarker key={row.id} center={[Number(row.latitude), Number(row.longitude)]} radius={row.id === selectedId ? 11 : 7} pathOptions={{ color: statusColor, fillColor: statusColor, fillOpacity: 0.85, weight: row.id === selectedId ? 4 : 2 }} eventHandlers={{ click: () => onSelect(row.id) }} />;
