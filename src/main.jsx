@@ -966,6 +966,7 @@ function DesignWorkspace({ profile, plannedRows, plantingRows, onUpload, onRefre
 
   const pending = plannedRows.filter((row) => row.validation_status === 'pending').length;
   const validated = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status)).length;
+  const previewRows = plannedRows.slice(0, MAX_MAP_MARKERS);
 
   return (
     <main className="app adminMode">
@@ -996,6 +997,11 @@ function DesignWorkspace({ profile, plannedRows, plantingRows, onUpload, onRefre
         </label>
         {error && <div className="notice" style={{ marginTop: 14 }}>{error}</div>}
       </section>
+
+      {!!plannedRows.length && <section className="records designMapCard" style={{ marginBottom: 16 }}>
+        <div className="recordsHeader"><div><h2>Map preview</h2><span>Imported points are shown on the map before validation.</span></div><span>{previewRows.length} / {plannedRows.length} points</span></div>
+        <div className="designPreviewMap"><EngineerMap rows={previewRows} selectedId="" onSelect={() => {}} onMapClick={() => {}} /></div>
+      </section>}
 
       <section className="records">
         <div className="recordsHeader"><h2>Planned poles</h2><span>{plannedRows.length} points</span></div>

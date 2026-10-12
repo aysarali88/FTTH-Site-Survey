@@ -656,6 +656,21 @@ button:disabled {
   display: none;
 }
 
+.designPreviewMap {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  height: 520px;
+  margin-top: 14px;
+  min-height: 520px;
+  overflow: hidden;
+  position: relative;
+}
+
+.designPreviewMap .map {
+  height: 520px;
+  min-height: 520px;
+}
+
 .fixedPin {
   color: #dc2626;
   filter: drop-shadow(0 8px 10px rgba(15, 23, 42, 0.35));
@@ -1857,6 +1872,26 @@ td {
   .engineerControls.open,
   .supervisorControls.open {
     transform: translateY(0);
+  }
+
+  .designPreviewMap {
+    height: 420px;
+    min-height: 420px;
+  }
+
+  .designPreviewMap .map {
+    height: 420px;
+    min-height: 420px;
+  }
+
+  .adminMode .designPreviewMap {
+    bottom: auto;
+    left: auto;
+    position: relative !important;
+    right: auto;
+    top: auto;
+    width: 100%;
+    z-index: auto;
   }
 
   th,
