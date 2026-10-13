@@ -2412,11 +2412,6 @@ function App() {
                 <Download size={18} />
                 KML
               </button>
-              <label className={`ghost fileButton ${busy ? 'disabled' : ''}`}>
-                <Upload size={18} />
-                Upload Excel
-                <input type="file" accept=".xlsx,.xls" onChange={importExcel} disabled={busy} />
-              </label>
             </>
           )}
         </div>
