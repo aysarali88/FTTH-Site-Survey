@@ -482,6 +482,32 @@ body {
   margin-top: 0;
 }
 
+.dashboardMode {
+  direction: rtl;
+}
+
+.dashboardMode .topbar {
+  direction: ltr;
+}
+
+.dashboardMode .topbarHeading,
+.dashboardMode .dashboardHero,
+.dashboardMode .dashboardFilters,
+.dashboardMode .dashboardKpis,
+.dashboardMode .dashboardMainGrid,
+.dashboardMode .dashboardSecondaryGrid,
+.dashboardMode .dashboardPanel {
+  direction: rtl;
+}
+
+.dashboardMode .topbarHeading {
+  text-align: right;
+}
+
+.dashboardMode .dashboardHeroActions {
+  direction: rtl;
+}
+
 .dashboardMode .dashboardHero {
   align-items: end;
   background: transparent;
