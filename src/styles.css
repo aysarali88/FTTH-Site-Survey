@@ -241,6 +241,232 @@ body {
   stroke: #2a1c05;
 }
 
+.dataMode {
+  direction: rtl;
+}
+
+.dataMode .topbar {
+  direction: ltr;
+}
+
+.dataMode .topbarHeading {
+  direction: rtl;
+}
+
+.dataMode .stats {
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.dataMode .stats article {
+  align-items: center;
+  background: linear-gradient(180deg, #fffefb, #fcf8ef) padding-box, linear-gradient(135deg, #efddb0, #e3dacb 40%, #efddb0 75%, #cdae6a) border-box;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  box-shadow: 0 18px 36px -18px rgba(120, 86, 30, 0.28), inset 0 2px 0 #fff;
+  min-height: 78px;
+  padding: 20px 24px;
+}
+
+.dataMode .stats article svg {
+  background: linear-gradient(135deg, #f7e9c4, #e7cb8a);
+  border-radius: 11px;
+  color: #6b4a12;
+  height: 34px;
+  padding: 8px;
+  width: 34px;
+}
+
+.dataMode .stats span {
+  color: #4a5a70;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+}
+
+.dataMode .stats strong {
+  color: var(--console-ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 38px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.dataMode .adminPages {
+  background: rgba(255, 254, 251, 0.8);
+  border: 1px solid var(--console-line);
+  border-radius: 99px;
+  box-shadow: inset 0 2px 0 #fff, 0 10px 24px -14px rgba(120, 86, 30, 0.3);
+  display: flex;
+  gap: 2px;
+  margin: 0 0 18px auto;
+  padding: 5px;
+  width: max-content;
+}
+
+.dataMode .adminPages button {
+  background: transparent;
+  border: 0;
+  border-radius: 99px;
+  color: #4a5a70;
+  min-height: 42px;
+  padding: 10px 20px;
+}
+
+.dataMode .adminPages button.active {
+  background: linear-gradient(135deg, #17406e, #0f2a4a);
+  border-color: transparent;
+  box-shadow: 0 8px 16px -4px rgba(15, 42, 74, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  color: #fbf3df;
+}
+
+.dataMode .adminFilters,
+.dataMode .workflowQueue {
+  background: linear-gradient(180deg, #fffefb, #fcf8ef) padding-box, linear-gradient(135deg, #efddb0, #e3dacb 40%, #efddb0 75%, #cdae6a) border-box;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  box-shadow: 0 18px 36px -18px rgba(120, 86, 30, 0.28), inset 0 2px 0 #fff;
+}
+
+.dataMode .adminFilters {
+  align-items: end;
+  gap: 14px;
+  grid-template-columns: 1.1fr repeat(3, minmax(0, 1fr));
+  margin-bottom: 18px;
+  padding: 18px 22px;
+}
+
+.dataMode .adminFilters label {
+  color: #7b8596;
+  font-size: 10px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+}
+
+.dataMode .adminFilters select,
+.dataMode .adminFilters input {
+  background: #fbf8f1;
+  border: 1px solid var(--console-line);
+  border-radius: 12px;
+  color: var(--console-ink);
+  font-size: 13px;
+  font-weight: 700;
+  height: 44px;
+  min-height: 44px;
+}
+
+.dataMode .adminFilters select:focus,
+.dataMode .adminFilters input:focus {
+  background: #fff;
+  border-color: #c9a25a;
+  box-shadow: 0 0 0 4px rgba(201, 162, 90, 0.18);
+}
+
+.dataMode .adminFilters .search {
+  background: #fbf8f1;
+  border: 1px solid var(--console-line);
+  border-radius: 12px;
+  min-height: 44px;
+}
+
+.dataMode .adminFilters .search svg {
+  color: var(--console-gold);
+}
+
+.dataMode .adminFilters .search input {
+  background: transparent;
+  border: 0;
+}
+
+.dataMode .workflowQueue {
+  margin-top: 0;
+  padding: 24px 26px 26px;
+}
+
+.dataMode .workflowQueue .recordsHeader {
+  margin-bottom: 8px;
+}
+
+.dataMode .workflowQueue .recordsHeader h2 {
+  color: var(--console-ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.dataMode .workflowQueue .recordsHeader span {
+  color: #4a5a70;
+  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+  font-size: 13.5px;
+}
+
+.dataMode .workflowQueue .ghost {
+  background: #fffefb;
+  border: 1px solid var(--console-line);
+  border-radius: 12px;
+  color: var(--console-ink);
+}
+
+.dataMode .workflowControls {
+  align-items: end;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 20px 0 6px;
+}
+
+.dataMode .workflowControls label {
+  color: #7b8596;
+  font-size: 10px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+}
+
+.dataMode .workflowControls select {
+  background: #fbf8f1;
+  border: 1px solid var(--console-line);
+  border-radius: 12px;
+  color: var(--console-ink);
+  font-size: 13px;
+  font-weight: 700;
+  height: 44px;
+  min-height: 44px;
+}
+
+.dataMode .workflowControls .save {
+  background: linear-gradient(135deg, #f3e1b0, #c9a25a 55%, #e6c887);
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 14px 26px -8px rgba(184, 134, 59, 0.6);
+  color: #2a1c05;
+  min-height: 52px;
+}
+
+.dataMode .workflowQueue .tableWrap {
+  background: #fff;
+  border: 1px solid var(--console-line);
+  border-radius: 14px;
+  margin-top: 8px;
+  overflow: auto;
+}
+
+.dataMode .workflowQueue th {
+  background: #f8f2e4;
+  color: #7b8596;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.dataMode .workflowQueue td {
+  border-bottom-color: #f0e9d8;
+  color: #2c4963;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dataMode .workflowQueue tbody tr:hover {
+  background: #fcf7ea;
+}
+
 .adminMode .adminPages button.active {
   background: var(--console-ink);
   border-color: var(--console-ink);

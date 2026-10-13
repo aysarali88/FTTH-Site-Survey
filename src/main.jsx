@@ -2382,7 +2382,7 @@ function App() {
   }
 
   return (
-    <main className={`app ${isAdmin ? 'adminMode' : ''} ${isAdmin && adminPage === 'dashboard' ? 'dashboardMode' : ''}`}>
+    <main className={`app ${isAdmin ? 'adminMode' : ''} ${isAdmin && adminPage === 'dashboard' ? 'dashboardMode' : ''} ${isAdmin && adminPage === 'data' ? 'dataMode' : ''}`}>
       <header className="topbar">
         {isAdmin ? (
           <div className="tbF" aria-label="Admin toolbar">
