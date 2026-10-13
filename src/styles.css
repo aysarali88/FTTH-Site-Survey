@@ -59,6 +59,188 @@ body {
   color: var(--console-gold);
 }
 
+.topbarHeading {
+  text-align: right;
+}
+
+.tbF {
+  --pc: #fbf4e4;
+  align-items: center;
+  background: linear-gradient(180deg, rgba(255, 254, 251, 0.94), rgba(250, 243, 227, 0.94)) padding-box, linear-gradient(135deg, #ebd29b, #b8863b 45%, #ebd29b 70%, #b8863b) border-box;
+  border: 1px solid transparent;
+  border-radius: 99px;
+  box-shadow: 0 20px 40px -14px rgba(120, 86, 30, 0.38), inset 0 2px 0 #fff;
+  color: #0f2a4a;
+  display: inline-flex;
+  gap: 6px;
+  padding: 7px;
+}
+
+.tbF .d {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 99px;
+  color: #0f2a4a;
+  display: flex;
+  height: 44px;
+  justify-content: center;
+  min-width: 44px;
+  overflow: hidden;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.tbF .d span,
+.tbF .pri span {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-width 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s, margin 0.35s;
+}
+
+.tbF .d:hover {
+  background: rgba(184, 134, 59, 0.1);
+}
+
+.tbF .d:hover span,
+.tbF .pri:hover span {
+  margin-left: 9px;
+  max-width: 90px;
+  opacity: 1;
+}
+
+.tbF .sep {
+  background: linear-gradient(180deg, transparent, #cdb27b, transparent);
+  height: 24px;
+  width: 1px;
+}
+
+.tbF .pri {
+  align-items: center;
+  background: linear-gradient(135deg, #f3e1b0, #c9a25a 55%, #e6c887);
+  border: 0;
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 6px 16px rgba(184, 134, 59, 0.38);
+  color: #2a1c05;
+  display: flex;
+  gap: 9px;
+  height: 40px;
+  justify-content: center;
+  min-width: 44px;
+  overflow: hidden;
+  padding: 0 18px;
+  position: relative;
+}
+
+.tbF .pri:hover {
+  transform: translateY(-1px);
+}
+
+.tbF .pri::after {
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  bottom: 0;
+  content: '';
+  left: -60%;
+  position: absolute;
+  top: 0;
+  transform: skewX(-20deg);
+  transition: left 0.75s;
+  width: 40%;
+}
+
+.tbF .pri:hover::after {
+  left: 130%;
+}
+
+.tbF .who {
+  align-items: center;
+  display: flex;
+  gap: 11px;
+  padding: 0 12px 0 4px;
+}
+
+.tbF .who b {
+  color: #0f2a4a;
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  line-height: 1.15;
+}
+
+.tbF .who small {
+  color: #a58a52;
+  display: block;
+  font-size: 8.5px;
+  letter-spacing: 2px;
+}
+
+.tbF .av {
+  align-items: center;
+  background: linear-gradient(135deg, #f0ddaa, #b8863b);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px #fffefb, 0 0 0 3.5px #c9a25a;
+  color: #2a1c05;
+  display: grid;
+  flex: none;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 12px;
+  font-weight: 700;
+  height: 30px;
+  place-items: center;
+  position: relative;
+  width: 30px;
+}
+
+.tbF .av::after {
+  background: #3fd08f;
+  border: 2px solid var(--pc);
+  border-radius: 50%;
+  bottom: -1px;
+  box-shadow: 0 0 8px rgba(63, 208, 143, 0.7);
+  content: '';
+  height: 9px;
+  position: absolute;
+  right: -2px;
+  width: 9px;
+}
+
+.tbF .out:hover {
+  background: rgba(214, 69, 65, 0.1);
+  color: #c23b37;
+}
+
+.tbF button {
+  cursor: pointer;
+  font: 600 11.5px Inter, 'Segoe UI', sans-serif;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  transition: background 0.2s, color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+
+.tbF button:active {
+  transform: scale(0.97);
+}
+
+.tbF svg {
+  flex: none;
+  stroke-width: 1.7;
+  transition: transform 0.3s;
+}
+
+.tbF .dl {
+  stroke: #b8863b;
+}
+
+.tbF .d:hover .dl {
+  transform: translateY(2px);
+}
+
+.tbF .pri svg {
+  stroke: #2a1c05;
+}
+
 .adminMode .adminPages button.active {
   background: var(--console-ink);
   border-color: var(--console-ink);

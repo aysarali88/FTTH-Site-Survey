@@ -2384,36 +2384,51 @@ function App() {
   return (
     <main className={`app ${isAdmin ? 'adminMode' : ''} ${isAdmin && adminPage === 'dashboard' ? 'dashboardMode' : ''}`}>
       <header className="topbar">
-        <div>
+        {isAdmin ? (
+          <div className="tbF" aria-label="Admin toolbar">
+            <button className="d" type="button" onClick={exportKml} aria-label="KML">
+              <Download className="dl" size={16} />
+              <span>KML</span>
+            </button>
+            <button className="d" type="button" onClick={exportExcel} aria-label="Excel">
+              <Download className="dl" size={16} />
+              <span>Excel</span>
+            </button>
+            <span className="sep" aria-hidden="true" />
+            <button className="pri rf" type="button" onClick={loadAll} disabled={busy} aria-label="Refresh">
+              <RefreshCcw size={16} />
+              <span>Refresh</span>
+            </button>
+            <span className="sep" aria-hidden="true" />
+            <button className="d out" type="button" onClick={changeProfile} aria-label="Logout">
+              <LogOut size={16} />
+              <span>Logout</span>
+            </button>
+            <div className="who" title="Current user">
+              <span className="av">{(profile.techName || 'A').slice(0, 1).toUpperCase()}</span>
+              <div><b>{profile.techName || 'Admin'}</b><small>ADMIN</small></div>
+            </div>
+          </div>
+        ) : (
+          <div className="actions">
+            <div className="profilePill" title="بيانات المستخدم الحالية">
+              <UserRound size={17} />
+              <span>{profile.techName}</span>
+              <strong>{`${profile.city} · ${profile.district}`}</strong>
+            </div>
+            <button className="ghost" type="button" onClick={changeProfile} aria-label="Logout">
+              <LogOut size={18} />
+              Logout
+            </button>
+            <button className="ghost" type="button" onClick={loadAll} disabled={busy}>
+              <RefreshCcw size={18} />
+              Refresh
+            </button>
+          </div>
+        )}
+        <div className="topbarHeading">
           <p className="eyebrow">Site Survey Pro</p>
           <h1>{isAdmin ? 'Dashboard' : 'خريطة الرفع الميداني'}</h1>
-        </div>
-        <div className="actions">
-          <div className="profilePill" title="بيانات المستخدم الحالية">
-            <UserRound size={17} />
-            <span>{profile.techName}</span>
-            <strong>{isAdmin ? 'Admin' : `${profile.city} · ${profile.district}`}</strong>
-          </div>
-          <button className="ghost" type="button" onClick={changeProfile} aria-label="Logout">
-            <LogOut size={18} />
-            Logout
-          </button>
-          <button className="ghost" type="button" onClick={loadAll} disabled={busy}>
-            <RefreshCcw size={18} />
-            Refresh
-          </button>
-          {isAdmin && (
-            <>
-              <button className="ghost" type="button" onClick={exportExcel}>
-                <Download size={18} />
-                Excel
-              </button>
-              <button className="ghost" type="button" onClick={exportKml}>
-                <Download size={18} />
-                KML
-              </button>
-            </>
-          )}
         </div>
       </header>
 
