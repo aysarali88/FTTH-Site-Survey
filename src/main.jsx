@@ -979,7 +979,7 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
         <article className="dashboardPanel dashboardMapPanel">
           <div className="dashboardPanelHead"><div><h3>Planting map</h3><span>{mapRows.length}{filteredRows.length > MAX_MAP_MARKERS ? ` of ${filteredRows.length}` : ''} points shown</span></div><MapPinned size={20} /></div>
           <div className="dashboardMapWrap">
-            <MapContainer center={mapCenter} zoom={12} maxZoom={22} scrollWheelZoom className="dashboardMap" zoomControl>
+            <MapContainer center={mapCenter} zoom={12} maxZoom={22} scrollWheelZoom className="dashboardMap" zoomControl rotate touchRotate rotateControl={{ closeOnZeroBearing: false, position: 'topright' }} bearing={0}>
               <MapLayers />
               <CurrentLocationControl />
               <MapResizeSync expanded={false} />
@@ -1159,7 +1159,7 @@ function EngineerMap({ rows, selectedId, onSelect, onMapClick, onMovePoint, addM
   const first = rows.find((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)));
   const center = first ? [Number(first.latitude), Number(first.longitude)] : [defaultLocation.latitude, defaultLocation.longitude];
   return (
-    <MapContainer center={center} zoom={14} maxZoom={22} scrollWheelZoom className="map" zoomControl>
+    <MapContainer center={center} zoom={14} maxZoom={22} scrollWheelZoom className="map" zoomControl rotate touchRotate rotateControl={{ closeOnZeroBearing: false, position: 'topright' }} bearing={0}>
       <MapLayers />
       <CurrentLocationControl />
       <MapResizeSync expanded={false} />
@@ -1396,6 +1396,10 @@ function LegacyTechnicianWorkspace({ assignments, records, onAdd, busy }) {
           maxZoom={22}
           scrollWheelZoom
           zoomControl
+          rotate
+          touchRotate
+          rotateControl={{ closeOnZeroBearing: false, position: 'topright' }}
+          bearing={0}
           className="map"
         >
           <MapLayers />
