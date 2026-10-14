@@ -1405,6 +1405,59 @@ button:disabled {
   font-weight: 800;
 }
 
+.mapLocationControl {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: absolute;
+  right: 10px;
+  top: 58px;
+  z-index: 800;
+}
+
+.mapLocationControl button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.2);
+  color: #0f2a4a;
+  display: inline-flex;
+  height: 42px;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0;
+  width: 42px;
+}
+
+.mapLocationControl button:hover {
+  background: #f1f7ff;
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.mapLocationControl button.locating svg {
+  animation: locationPulse 0.9s linear infinite;
+}
+
+.mapLocationError {
+  background: rgba(15, 23, 42, 0.92);
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  max-width: 220px;
+  padding: 8px 10px;
+  text-align: right;
+}
+
+@keyframes locationPulse {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .leaflet-control-rotate {
   border: 0 !important;
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.2);

@@ -735,6 +735,50 @@ function MapResizeSync({ expanded }) {
   return null;
 }
 
+function CurrentLocationControl({ onLocated }) {
+  const map = useMap();
+  const [position, setPosition] = useState(null);
+  const [locating, setLocating] = useState(false);
+  const [error, setError] = useState('');
+
+  function locate() {
+    if (!navigator.geolocation) {
+      setError('المتصفح لا يدعم تحديد الموقع.');
+      return;
+    }
+
+    setLocating(true);
+    setError('');
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const next = {
+          latitude: Number(coords.latitude.toFixed(7)),
+          longitude: Number(coords.longitude.toFixed(7)),
+        };
+        setPosition([next.latitude, next.longitude]);
+        map.flyTo([next.latitude, next.longitude], Math.max(map.getZoom(), 17), { animate: true, duration: 0.8 });
+        onLocated?.(next);
+        setLocating(false);
+      },
+      () => {
+        setError('لم يتم السماح بالوصول إلى موقع الجهاز.');
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
+    );
+  }
+
+  return <>
+    <div className="mapLocationControl">
+      <button className={locating ? 'locating' : ''} type="button" onClick={locate} title="موقعي" aria-label="تحديد موقعي">
+        <LocateFixed size={20} />
+      </button>
+      {error && <span className="mapLocationError" role="alert">{error}</span>}
+    </div>
+    {position && <CircleMarker center={position} radius={8} pathOptions={{ color: '#ffffff', fillColor: '#2563eb', fillOpacity: 0.95, weight: 3 }} />}
+  </>;
+}
+
 function MapLayers() {
   return (
     <LayersControl position="topright">
@@ -937,6 +981,7 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
           <div className="dashboardMapWrap">
             <MapContainer center={mapCenter} zoom={12} maxZoom={22} scrollWheelZoom className="dashboardMap" zoomControl>
               <MapLayers />
+              <CurrentLocationControl />
               <MapResizeSync expanded={false} />
               <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} onDelete={onDelete} canDelete />
             </MapContainer>
@@ -1116,6 +1161,7 @@ function EngineerMap({ rows, selectedId, onSelect, onMapClick, onMovePoint, addM
   return (
     <MapContainer center={center} zoom={14} maxZoom={22} scrollWheelZoom className="map" zoomControl>
       <MapLayers />
+      <CurrentLocationControl />
       <MapResizeSync expanded={false} />
       <EngineerMapClickHandler enabled={addMode} onMapClick={onMapClick} />
       {rows.map((row) => {
@@ -1353,6 +1399,7 @@ function LegacyTechnicianWorkspace({ assignments, records, onAdd, busy }) {
           className="map"
         >
           <MapLayers />
+          <CurrentLocationControl onLocated={(next) => { setLocation(next); setMessage('تم تحديد موقعك الحالي.'); }} />
           <MapCenterSync value={location} onChange={setLocation} />
           <MapResizeSync expanded={false} />
           <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} />
@@ -2570,6 +2617,7 @@ function App() {
             bearing={0}
           >
             <MapLayers />
+            <CurrentLocationControl onLocated={(next) => { setLocation(next); setMessage('تم تحديد موقعك الحالي.'); }} />
             <MapCenterSync value={form} onChange={setLocation} />
             <MapResizeSync expanded={mapExpanded} />
             <FastSurveyMarkers groupedRecords={mapRecords} onDelete={deleteRecord} canDelete />
@@ -2583,10 +2631,6 @@ function App() {
             <MapPin size={36} />
           </div>
           <div className="mapControls">
-            <button type="button" onClick={() => requestCurrentLocation(false)}>
-              <LocateFixed size={17} />
-              موقعي
-            </button>
             <span>{form.latitude}, {form.longitude}</span>
           </div>
         </div>
