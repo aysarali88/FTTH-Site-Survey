@@ -2652,6 +2652,10 @@ td {
     z-index: 5000;
   }
 
+  .desktopWorkflowTabs {
+    display: none;
+  }
+
   .workflowModeTabs button {
     font-size: 11px;
     min-height: 38px;
