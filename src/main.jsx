@@ -24,7 +24,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { CircleMarker, LayersControl, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { CircleMarker, LayersControl, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
@@ -965,6 +965,17 @@ function MapLayers() {
   );
 }
 
+function KmlMapLabel({ text, style = {} }) {
+  const scale = Number(style.scale);
+  if (!text || (Number.isFinite(scale) && scale <= 0)) return null;
+  const fontSize = Math.max(8, Math.min(11, 9 * (Number.isFinite(scale) ? scale : 1)));
+  return (
+    <Tooltip permanent direction="center" className="kmzMapLabel" opacity={1}>
+      <span style={{ color: style.color || '#16a34a', opacity: style.opacity ?? 1, fontSize: `${fontSize}px` }}>{text}</span>
+    </Tooltip>
+  );
+}
+
 function CablePaths({ paths = [] }) {
   return paths.map((path) => (
     <Polyline
@@ -972,6 +983,7 @@ function CablePaths({ paths = [] }) {
       positions={path.coordinates || []}
       pathOptions={{ color: path.style_data?.line?.color || importedAssetMeta(path).color, opacity: (path.style_data?.line?.opacity ?? 1) * 0.95, weight: Math.max(2, Math.min(Number(path.style_data?.line?.width) || 4, 8)) }}
     >
+      <KmlMapLabel text={path.path_name || 'Cable route'} style={path.style_data?.label} />
       <Popup>
         <div className="mapPointPopup" dir="rtl">
           <strong>{path.path_name || 'Cable route'}</strong>
@@ -1028,10 +1040,10 @@ function ImportedDesignAssets({ assets = [] }) {
       </Popup>
     );
     if (asset.asset_type === 'line') {
-      return <Polyline key={asset.id} positions={asset.coordinates || []} pathOptions={{ color: asset.style_data?.line?.color || meta.color, opacity: asset.style_data?.line?.opacity ?? 0.72, weight: Math.max(1, Math.min(Number(asset.style_data?.line?.width) || 2, 8)) }}>{popup}</Polyline>;
+      return <Polyline key={asset.id} positions={asset.coordinates || []} pathOptions={{ color: asset.style_data?.line?.color || meta.color, opacity: asset.style_data?.line?.opacity ?? 0.72, weight: Math.max(1, Math.min(Number(asset.style_data?.line?.width) || 2, 8)) }}><KmlMapLabel text={label} style={asset.style_data?.label} />{popup}</Polyline>;
     }
     if (asset.asset_type === 'polygon') {
-      return <Polygon key={asset.id} positions={asset.coordinates || []} pathOptions={{ color: meta.color, fillColor: meta.fillColor, fillOpacity: meta.fill ? meta.opacity : 0, opacity: meta.outline ? meta.opacity : 0, weight: 1 }}>{popup}</Polygon>;
+      return <Polygon key={asset.id} positions={asset.coordinates || []} pathOptions={{ color: meta.color, fillColor: meta.fillColor, fillOpacity: meta.fill ? meta.opacity : 0, opacity: meta.outline ? meta.opacity : 0, weight: 1 }}><KmlMapLabel text={label} style={asset.style_data?.label} />{popup}</Polygon>;
     }
     const iconHref = asset.style_data?.icon?.href || '';
     if (iconHref && !/placemark_circle\.png$/i.test(iconHref)) {
@@ -1042,7 +1054,7 @@ function ImportedDesignAssets({ assets = [] }) {
         iconAnchor: [size / 2, size / 2],
         popupAnchor: [0, -size / 2],
       });
-      return <Marker key={asset.id} position={asset.coordinates || []} icon={icon} opacity={meta.opacity}>{popup}</Marker>;
+      return <Marker key={asset.id} position={asset.coordinates || []} icon={icon} opacity={meta.opacity}><KmlMapLabel text={label} style={asset.style_data?.label} />{popup}</Marker>;
     }
     return (
       <CircleMarker
@@ -1052,6 +1064,7 @@ function ImportedDesignAssets({ assets = [] }) {
         renderer={canvasRenderer}
         pathOptions={{ color: '#ffffff', fillColor: meta.fillColor, fillOpacity: meta.opacity * 0.86, opacity: 0.9, weight: 1.5 }}
       >
+        <KmlMapLabel text={label} style={asset.style_data?.label} />
         {popup}
       </CircleMarker>
     );

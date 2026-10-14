@@ -1220,6 +1220,30 @@ button:disabled {
   min-height: 520px;
 }
 
+.leaflet-tooltip.kmzMapLabel {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 700;
+  line-height: 1;
+  max-width: 150px;
+  overflow: hidden;
+  padding: 0;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaflet-tooltip.kmzMapLabel::before {
+  display: none;
+}
+
+.leaflet-tooltip.kmzMapLabel span {
+  text-shadow: -1px -1px 1px #fff, 1px -1px 1px #fff, -1px 1px 1px #fff, 1px 1px 1px #fff, 0 0 2px #fff;
+}
+
 .mapPointPopup {
   display: grid;
   gap: 5px;
