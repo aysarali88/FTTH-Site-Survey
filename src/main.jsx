@@ -1457,6 +1457,12 @@ function SupervisorWorkspace({ profile, plannedRows, legacyAssignments = [], leg
     if (!selected && available[0]) setSelectedId(available[0].id);
   }, [available, selected]);
 
+  function switchWorkflowMode(mode) {
+    setWorkflowMode(mode);
+    setControlsOpen(false);
+    if (mode === 'legacy' && !legacyAssignments.length) onRefresh().catch(() => {});
+  }
+
   async function submit() {
     if (!selected || selected.validation_status === 'planted') return;
     setMessage('');
@@ -1474,7 +1480,7 @@ function SupervisorWorkspace({ profile, plannedRows, legacyAssignments = [], leg
       <header className="topbar"><div><p className="eyebrow">Site Survey Pro</p><h1>{isTechnician ? 'Technician Planting' : 'Supervisor Planting'}</h1></div><div className="actions"><div className="profilePill"><UserRound size={17} /><span>{profile.techName}</span><strong>{isTechnician ? 'Technician' : 'Supervisor'}</strong></div><button className="ghost" type="button" onClick={onLogout}><LogOut size={18} /> Logout</button><button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={18} /> Refresh</button></div></header>
       <section className="stats"><article><CheckCircle2 size={19} /><span>Validated points</span><strong>{available.filter((row) => row.validation_status === 'validated').length}</strong></article><article><MapPin size={19} /><span>Planted</span><strong>{available.filter((row) => row.validation_status === 'planted').length}</strong></article><article><Camera size={19} /><span>Photos</span><strong>{available.filter((row) => row.is_planted && row.photo_url).length}</strong></article></section>
       {message && <div className="notice">{message}</div>}
-      {isTechnician && legacyAssignments.length > 0 && <div className="workflowModeTabs"><button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => setWorkflowMode('validated')}>Assigned validated points</button><button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => setWorkflowMode('legacy')}>Legacy areas</button></div>}
+      {isTechnician && <div className="workflowModeTabs"><button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => switchWorkflowMode('validated')}>Assigned validated points</button><button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => switchWorkflowMode('legacy')}>Legacy areas</button></div>}
       <button className="mobileLogoutButton" type="button" onClick={onLogout}><LogOut size={18} /><span>تسجيل الخروج</span></button>
       {workflowMode === 'validated' && <button className="engineerPanelToggle" type="button" onClick={() => setControlsOpen((value) => !value)} aria-expanded={controlsOpen} aria-controls="supervisor-controls" aria-label={controlsOpen ? 'إخفاء لوحة الفني' : 'إظهار لوحة الفني'}>
         <Menu size={24} />
@@ -1483,7 +1489,7 @@ function SupervisorWorkspace({ profile, plannedRows, legacyAssignments = [], leg
       <section className="workspace">
       <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} selectedId={selectedId} onSelect={setSelectedId} onMapClick={() => {}} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
       <section id="supervisor-controls" className={`records panel supervisorControls ${controlsOpen ? 'open' : ''}`} style={{ padding: 20 }}>
-        {isTechnician && legacyAssignments.length > 0 && <div className="mobileWorkflowTabs"><button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => setWorkflowMode('validated')}>Assigned validated points</button><button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => setWorkflowMode('legacy')}>Legacy areas</button></div>}
+        {isTechnician && <div className="mobileWorkflowTabs"><button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => switchWorkflowMode('validated')}>Assigned validated points</button><button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => switchWorkflowMode('legacy')}>Legacy areas</button></div>}
         <div className="recordsHeader"><div><h2>Validated planting points</h2><span>Only engineer-approved points are shown.</span></div></div>
         <label style={{ marginTop: 14 }}>Point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{available.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} - {row.validation_status}</option>)}</select></label>
         {selected && <>
