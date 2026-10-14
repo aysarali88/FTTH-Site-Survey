@@ -24,7 +24,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { CircleMarker, LayersControl, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
+import { CircleMarker, LayersControl, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
@@ -972,7 +972,6 @@ function CablePaths({ paths = [] }) {
       positions={path.coordinates || []}
       pathOptions={{ color: path.style_data?.line?.color || importedAssetMeta(path).color, opacity: (path.style_data?.line?.opacity ?? 1) * 0.95, weight: Math.max(2, Math.min(Number(path.style_data?.line?.width) || 4, 8)) }}
     >
-      {path.style_data?.label?.scale > 0 && <Tooltip permanent direction="center">{path.path_name || 'Cable route'}</Tooltip>}
       <Popup>
         <div className="mapPointPopup" dir="rtl">
           <strong>{path.path_name || 'Cable route'}</strong>
@@ -1002,7 +1001,6 @@ function importedAssetMeta(asset = {}) {
     color: style.icon?.color || style.line?.color || style.polygon?.color || fallback.color,
     fillColor: style.polygon?.color || style.icon?.color || fallback.fillColor,
     opacity: style.icon?.opacity ?? style.line?.opacity ?? style.polygon?.opacity ?? 1,
-    labelScale: Number(style.label?.scale) || 0,
     iconScale: Number(style.icon?.scale) || 1,
     fill: style.polygon?.fill !== false,
     outline: style.polygon?.outline !== false,
@@ -1030,10 +1028,10 @@ function ImportedDesignAssets({ assets = [] }) {
       </Popup>
     );
     if (asset.asset_type === 'line') {
-      return <Polyline key={asset.id} positions={asset.coordinates || []} pathOptions={{ color: asset.style_data?.line?.color || meta.color, opacity: asset.style_data?.line?.opacity ?? 0.72, weight: Math.max(1, Math.min(Number(asset.style_data?.line?.width) || 2, 8)) }}>{asset.style_data?.label?.scale > 0 && <Tooltip permanent direction="center">{label}</Tooltip>}{popup}</Polyline>;
+      return <Polyline key={asset.id} positions={asset.coordinates || []} pathOptions={{ color: asset.style_data?.line?.color || meta.color, opacity: asset.style_data?.line?.opacity ?? 0.72, weight: Math.max(1, Math.min(Number(asset.style_data?.line?.width) || 2, 8)) }}>{popup}</Polyline>;
     }
     if (asset.asset_type === 'polygon') {
-      return <Polygon key={asset.id} positions={asset.coordinates || []} pathOptions={{ color: meta.color, fillColor: meta.fillColor, fillOpacity: meta.fill ? meta.opacity : 0, opacity: meta.outline ? meta.opacity : 0, weight: 1 }}>{asset.style_data?.label?.scale > 0 && <Tooltip permanent>{label}</Tooltip>}{popup}</Polygon>;
+      return <Polygon key={asset.id} positions={asset.coordinates || []} pathOptions={{ color: meta.color, fillColor: meta.fillColor, fillOpacity: meta.fill ? meta.opacity : 0, opacity: meta.outline ? meta.opacity : 0, weight: 1 }}>{popup}</Polygon>;
     }
     const iconHref = asset.style_data?.icon?.href || '';
     if (iconHref && !/placemark_circle\.png$/i.test(iconHref)) {
@@ -1044,7 +1042,7 @@ function ImportedDesignAssets({ assets = [] }) {
         iconAnchor: [size / 2, size / 2],
         popupAnchor: [0, -size / 2],
       });
-      return <Marker key={asset.id} position={asset.coordinates || []} icon={icon} opacity={meta.opacity}>{meta.labelScale > 0 && <Tooltip permanent direction="right" offset={[5, 0]}>{label}</Tooltip>}{popup}</Marker>;
+      return <Marker key={asset.id} position={asset.coordinates || []} icon={icon} opacity={meta.opacity}>{popup}</Marker>;
     }
     return (
       <CircleMarker
@@ -1054,7 +1052,6 @@ function ImportedDesignAssets({ assets = [] }) {
         renderer={canvasRenderer}
         pathOptions={{ color: '#ffffff', fillColor: meta.fillColor, fillOpacity: meta.opacity * 0.86, opacity: 0.9, weight: 1.5 }}
       >
-        {meta.labelScale > 0 && <Tooltip permanent direction="right" offset={[5, 0]}>{label}</Tooltip>}
         {popup}
       </CircleMarker>
     );
