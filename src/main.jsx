@@ -49,6 +49,7 @@ const CITY_DISTRICTS = {
 const LEGACY_AREA_OPTIONS = [
   { city: 'Misrata', district: 'راس عمار' },
   { city: 'Misrata', district: 'راس علي' },
+  { city: 'Misrata', district: 'المنقوش' },
   { city: 'Tripoli', district: 'شارع الظل' },
   { city: 'Tripoli', district: 'حي الاندلس 2' },
   { city: 'Tripoli', district: 'المنصوره' },
