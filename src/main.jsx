@@ -24,7 +24,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { CircleMarker, LayersControl, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { CircleMarker, LayersControl, MapContainer, Marker, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
@@ -613,24 +613,53 @@ async function readKmlFromFile(file) {
   return entry.async('text');
 }
 
-function parseKmlPoints(text) {
+function parseKmlCoordinates(raw) {
+  return raw
+    .trim()
+    .split(/\s+/)
+    .map((token) => {
+      const [longitude, latitude] = token.split(',').map(Number);
+      return Number.isFinite(latitude) && Number.isFinite(longitude) ? [latitude, longitude] : null;
+    })
+    .filter(Boolean);
+}
+
+function parseKmlDocument(text) {
   const xml = new DOMParser().parseFromString(text, 'application/xml');
   if (xml.querySelector('parsererror')) throw new Error('ملف KML غير صالح.');
   const points = [];
+  const paths = [];
+  let pointIndex = 0;
+  let pathIndex = 0;
   xml.querySelectorAll('Placemark').forEach((placemark, index) => {
-    const coordinateNode = placemark.querySelector('Point coordinates, coordinates');
+    const coordinateNode = placemark.querySelector('Point coordinates');
     const raw = coordinateNode?.textContent?.trim() || '';
-    const firstCoordinate = raw.split(/\s+/).find(Boolean) || '';
-    const [longitude, latitude] = firstCoordinate.split(',').map(Number);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
-    points.push({
-      id: `PLAN-${Date.now()}-${String(index + 1).padStart(4, '0')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
-      latitude,
-      longitude,
-      point_name: placemark.querySelector('name')?.textContent?.trim() || `Point ${index + 1}`,
+    const firstCoordinate = parseKmlCoordinates(raw)[0];
+    const name = placemark.querySelector('name')?.textContent?.trim() || '';
+    if (firstCoordinate) {
+      const [latitude, longitude] = firstCoordinate;
+      pointIndex += 1;
+      points.push({
+        id: `PLAN-${Date.now()}-${String(pointIndex).padStart(4, '0')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+        latitude,
+        longitude,
+        point_name: name || `Point ${pointIndex}`,
+      });
+    }
+
+    placemark.querySelectorAll('LineString coordinates').forEach((lineNode, lineIndex) => {
+      const coordinates = parseKmlCoordinates(lineNode.textContent || '');
+      if (coordinates.length < 2) return;
+      pathIndex += 1;
+      paths.push({
+        id: `ROUTE-${Date.now()}-${String(pathIndex).padStart(4, '0')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+        path_name: name || `Cable route ${pathIndex}`,
+        path_part: lineIndex + 1,
+        coordinates,
+      });
     });
   });
-  return points;
+  return { points, paths };
 }
 
 function buildRowsFromWorkbook(workbook) {
@@ -801,6 +830,47 @@ function MapLayers() {
       </LayersControl.BaseLayer>
     </LayersControl>
   );
+}
+
+function CablePaths({ paths = [] }) {
+  return paths.map((path) => (
+    <Polyline
+      key={path.id}
+      positions={path.coordinates || []}
+      pathOptions={{ color: '#ec4899', opacity: 0.95, weight: 4, dashArray: '10 7' }}
+    >
+      <Popup>
+        <div className="mapPointPopup" dir="rtl">
+          <strong>{path.path_name || 'Cable route'}</strong>
+          <span>مسار كابل</span>
+        </div>
+      </Popup>
+    </Polyline>
+  ));
+}
+
+function MapFitToContent({ rows = [], paths = [] }) {
+  const map = useMap();
+  const signature = useMemo(
+    () => JSON.stringify({
+      rows: rows.map((row) => [row.latitude, row.longitude]),
+      paths: paths.map((path) => path.coordinates),
+    }),
+    [rows, paths],
+  );
+
+  useEffect(() => {
+    const points = rows
+      .map((row) => [Number(row.latitude), Number(row.longitude)])
+      .filter(([latitude, longitude]) => Number.isFinite(latitude) && Number.isFinite(longitude));
+    const routePoints = paths.flatMap((path) => path.coordinates || []);
+    const allPoints = [...points, ...routePoints];
+    if (allPoints.length < 2) return;
+    const bounds = L.latLngBounds(allPoints);
+    if (bounds.isValid()) map.fitBounds(bounds.pad(0.12), { maxZoom: 18, animate: false });
+  }, [map, signature]);
+
+  return null;
 }
 
 function SurveyMarkers({ groupedRecords, onDelete, canDelete }) {
@@ -1024,7 +1094,7 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
   );
 }
 
-function DesignWorkspace({ profile, plannedRows, plantingRows, onUpload, onDeleteBatch, onRefresh, onLogout, busy }) {
+function DesignWorkspace({ profile, plannedRows, plannedRoutes, plantingRows, onUpload, onDeleteBatch, onRefresh, onLogout, busy }) {
   const [city, setCity] = useState(profile.city || 'Misrata');
   const [district, setDistrict] = useState(profile.district || '');
   const [error, setError] = useState('');
@@ -1040,9 +1110,9 @@ function DesignWorkspace({ profile, plannedRows, plantingRows, onUpload, onDelet
     setError('');
     try {
       const text = await readKmlFromFile(file);
-      const points = parseKmlPoints(text);
-      if (!points.length) throw new Error('لم يتم العثور على نقاط داخل الملف.');
-      await onUpload(points, { city, district, fileName: file.name });
+       const { points, paths } = parseKmlDocument(text);
+       if (!points.length && !paths.length) throw new Error('لم يتم العثور على نقاط أو مسارات داخل الملف.');
+       await onUpload(points, { city, district, fileName: file.name, paths });
     } catch (uploadError) {
       setError(uploadError.message);
     }
@@ -1054,23 +1124,27 @@ function DesignWorkspace({ profile, plannedRows, plantingRows, onUpload, onDelet
   const districtOptions = CITY_DISTRICTS[city] || [];
   const batches = useMemo(() => {
     const grouped = new Map();
-    plannedRows.forEach((row) => {
+    [...plannedRows, ...plannedRoutes].forEach((row) => {
       if (!row.batch_id) return;
       const current = grouped.get(row.batch_id) || {
         batchId: row.batch_id,
         city: row.city || '-',
         district: row.district || '-',
         count: 0,
+        routeCount: 0,
         hasPlanted: false,
         latest: row.created_at || '',
       };
-      current.count += 1;
+      if (row.latitude !== undefined) current.count += 1;
+      else current.routeCount += 1;
       current.hasPlanted = current.hasPlanted || row.validation_status === 'planted' || row.is_planted;
       if (row.created_at > current.latest) current.latest = row.created_at;
       grouped.set(row.batch_id, current);
     });
     return Array.from(grouped.values()).sort((a, b) => String(b.latest).localeCompare(String(a.latest)));
-  }, [plannedRows]);
+  }, [plannedRows, plannedRoutes]);
+
+  const previewRoutes = plannedRoutes.slice(0, MAX_MAP_MARKERS);
 
   return (
     <main className="app adminMode">
@@ -1084,7 +1158,7 @@ function DesignWorkspace({ profile, plannedRows, plantingRows, onUpload, onDelet
       </header>
 
       <section className="stats">
-        <article><Upload size={19} /><span>Imported points</span><strong>{plannedRows.length}</strong></article>
+        <article><Upload size={19} /><span>Imported points / cable routes</span><strong>{plannedRows.length} / {plannedRoutes.length}</strong></article>
         <article><Target size={19} /><span>Pending validation</span><strong>{pending}</strong></article>
         <article><CheckCircle2 size={19} /><span>Validated / planted</span><strong>{validated}</strong></article>
       </section>
@@ -1102,14 +1176,14 @@ function DesignWorkspace({ profile, plannedRows, plantingRows, onUpload, onDelet
         {error && <div className="notice" style={{ marginTop: 14 }}>{error}</div>}
       </section>
 
-      {!!batches.length && <section className="records designBatchCard" style={{ marginBottom: 16 }}>
+       {!!batches.length && <section className="records designBatchCard" style={{ marginBottom: 16 }}>
         <div className="recordsHeader"><div><h2>Uploaded areas</h2><span>Delete only a selected uploaded batch.</span></div><span>{batches.length} batches</span></div>
-        <div className="batchList">{batches.map((batch) => <div className="batchRow" key={batch.batchId}><div><strong>{batch.city} · {batch.district}</strong><span>{batch.count} points · {batch.batchId}</span></div><button className="dangerMini" type="button" disabled={busy || batch.hasPlanted} title={batch.hasPlanted ? 'Cannot delete a batch with planted points' : 'Delete batch'} onClick={async () => { if (!window.confirm(`Delete ${batch.count} points from ${batch.city} / ${batch.district}?`)) return; setError(''); try { await onDeleteBatch(batch.batchId); } catch (deleteError) { setError(deleteError.message); } }}><Trash2 size={16} /> Delete</button></div>)}</div>
+        <div className="batchList">{batches.map((batch) => <div className="batchRow" key={batch.batchId}><div><strong>{batch.city} · {batch.district}</strong><span>{batch.count} points · {batch.routeCount} cable routes · {batch.batchId}</span></div><button className="dangerMini" type="button" disabled={busy || batch.hasPlanted} title={batch.hasPlanted ? 'Cannot delete a batch with planted points' : 'Delete batch'} onClick={async () => { if (!window.confirm(`Delete ${batch.count} points and ${batch.routeCount} cable routes from ${batch.city} / ${batch.district}?`)) return; setError(''); try { await onDeleteBatch(batch.batchId); } catch (deleteError) { setError(deleteError.message); } }}><Trash2 size={16} /> Delete</button></div>)}</div>
       </section>}
 
-      {!!plannedRows.length && <section className="records designMapCard" style={{ marginBottom: 16 }}>
-        <div className="recordsHeader"><div><h2>Map preview</h2><span>Imported points are shown on the map before validation.</span></div><span>{previewRows.length} / {plannedRows.length} points</span></div>
-        <div className="designPreviewMap"><EngineerMap rows={previewRows} selectedId="" onSelect={() => {}} onMapClick={() => {}} /></div>
+       {(plannedRows.length || plannedRoutes.length) > 0 && <section className="records designMapCard" style={{ marginBottom: 16 }}>
+        <div className="recordsHeader"><div><h2>Map preview</h2><span>Imported points and cable routes are shown before validation.</span></div><span>{previewRows.length} points · {previewRoutes.length} cable routes</span></div>
+        <div className="designPreviewMap"><EngineerMap rows={previewRows} paths={previewRoutes} selectedId="" onSelect={() => {}} onMapClick={() => {}} /></div>
       </section>}
 
       <section className="records">
@@ -1155,15 +1229,20 @@ function engineerPointIcon(color, selected) {
   });
 }
 
-function EngineerMap({ rows, selectedId, onSelect, onMapClick, onMovePoint, addMode = false, moveMode = false }) {
+function EngineerMap({ rows, paths = [], selectedId, onSelect, onMapClick, onMovePoint, addMode = false, moveMode = false }) {
   const first = rows.find((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)));
-  const center = first ? [Number(first.latitude), Number(first.longitude)] : [defaultLocation.latitude, defaultLocation.longitude];
+  const firstPathPoint = paths.flatMap((path) => path.coordinates || [])[0];
+  const center = first
+    ? [Number(first.latitude), Number(first.longitude)]
+    : firstPathPoint || [defaultLocation.latitude, defaultLocation.longitude];
   return (
     <MapContainer center={center} zoom={14} maxZoom={22} scrollWheelZoom className="map" zoomControl rotate touchRotate rotateControl={{ closeOnZeroBearing: false, position: 'topright' }} bearing={0}>
       <MapLayers />
       <CurrentLocationControl />
       <MapResizeSync expanded={false} />
+      <MapFitToContent rows={rows} paths={paths} />
       <EngineerMapClickHandler enabled={addMode} onMapClick={onMapClick} />
+      <CablePaths paths={paths} />
       {rows.map((row) => {
         const statusColor = row.validation_status === 'validated' ? '#2563eb' : row.validation_status === 'planted' ? '#16a34a' : row.validation_status === 'rejected' ? '#dc2626' : '#f59e0b';
         const selected = row.id === selectedId;
@@ -1202,7 +1281,7 @@ function EngineerMap({ rows, selectedId, onSelect, onMapClick, onMovePoint, addM
   );
 }
 
-function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLogout, onValidate, onMove, onDelete, onAdd, busy }) {
+function EngineerWorkspace({ profile, plannedRows, plannedRoutes, technicians, onRefresh, onLogout, onValidate, onMove, onDelete, onAdd, busy }) {
   const [selectedId, setSelectedId] = useState(plannedRows[0]?.id || '');
   const [status, setStatus] = useState('validated');
   const [rememberedAssignedTo, setRememberedAssignedTo] = useState(() => {
@@ -1312,7 +1391,7 @@ function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLog
         <Menu size={24} />
       </button>
       <section className="workspace">
-        <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} onMovePoint={handleMovePoint} addMode={addMode} moveMode={moveMode} />{addMode && <div className="mapAddHint">Click on the map to place a new point</div>}{moveMode && <><button className="mapMoveFinishButton" type="button" onClick={() => setMoveMode(false)}>Finish editing location</button><div className="mapMoveHint">Drag the selected point to the correct location.</div></>}<div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div></div>
+         <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} paths={plannedRoutes} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} onMovePoint={handleMovePoint} addMode={addMode} moveMode={moveMode} />{addMode && <div className="mapAddHint">Click on the map to place a new point</div>}{moveMode && <><button className="mapMoveFinishButton" type="button" onClick={() => setMoveMode(false)}>Finish editing location</button><div className="mapMoveHint">Drag the selected point to the correct location.</div></>}<div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div></div>
         <section id="engineer-controls" className={`panel engineerControls ${controlsOpen ? 'open' : ''}`}>
           <div className="panelHeader"><div><p>Engineer review</p><h2>Validation queue</h2><span className="autoId">{plannedRows.length} planned points</span></div><Target color="#2563eb" /></div>
           {selected && <><div className="pointDetails"><div><span>Point</span><strong>{selected.point_name || selected.id}</strong></div><div><span>Area / City</span><strong>{selected.city || '-'}</strong></div><div><span>District</span><strong>{selected.district || '-'}</strong></div><div><span>Status</span><strong>{selected.validation_status || '-'}</strong></div></div><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><button className={`ghost moveLocationButton${moveMode ? ' active' : ''}`} type="button" onClick={toggleMoveMode} disabled={busy}><MapPin size={17} />{moveMode ? 'Finish editing location' : 'Edit location'}</button>{moveMode && <div className="moveLocationHint">Drag the selected point to the correct location.</div>}<label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label>{status === 'validated' && <label>Assign technician<select value={assignedTo} onChange={(event) => rememberTechnician(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>}<label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy || (status === 'validated' && !assignedTo)}>Save decision</button><button className="dangerMini engineerDeleteButton" type="button" onClick={deleteSelected} disabled={busy || selected.validation_status === 'planted'}><Trash2 size={17} /> Delete point</button></>}
@@ -1614,6 +1693,7 @@ function App() {
   const [forms, setForms] = useState(() => makeEmptyForms(readSavedProfile()));
   const [records, setRecords] = useState({ buildings: [], poles: [], column_checks: [] });
   const [plannedRows, setPlannedRows] = useState([]);
+  const [plannedRoutes, setPlannedRoutes] = useState([]);
   const [legacyAssignments, setLegacyAssignments] = useState([]);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
@@ -1900,6 +1980,12 @@ function App() {
         .order('created_at', { ascending: false })
         .limit(5000);
       if (plannedError && plannedError.code !== '42P01') throw plannedError;
+      const { data: routes, error: routesError } = await supabase
+        .from('planned_routes')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(2000);
+      if (routesError && routesError.code !== '42P01') throw routesError;
       if (['admin', 'design', 'engineer', 'tech'].includes(profile?.role)) {
         const { data: assignments, error: assignmentsError } = await supabase
           .from('legacy_area_assignments')
@@ -1932,6 +2018,7 @@ function App() {
       }
       setRecords(districtResult.normalized);
       setPlannedRows(planned || []);
+      setPlannedRoutes(routes || []);
       setMessage('تم تحديث البيانات بنجاح.');
     } catch (error) {
       setMessage(`تعذر تحميل البيانات: ${error.message}`);
@@ -1953,10 +2040,27 @@ function App() {
         batch_id: batchId,
         validation_status: 'pending',
       }));
-      const { error } = await supabase.from('planned_poles').insert(rows);
-      if (error) throw error;
+      const routes = (metadata.paths || []).map((path) => ({
+        ...path,
+        city: metadata.city,
+        district: resolveDistrict(metadata.district, metadata.city, records) || null,
+        created_by: profile.username || profile.techName,
+        batch_id: batchId,
+      }));
+      if (rows.length) {
+        const { error } = await supabase.from('planned_poles').insert(rows);
+        if (error) throw error;
+      }
+      if (routes.length) {
+        const { error } = await supabase.from('planned_routes').insert(routes);
+        if (error) {
+          if (rows.length) await supabase.from('planned_poles').delete().eq('batch_id', batchId);
+          throw error;
+        }
+      }
       setPlannedRows((currentRows) => [...rows, ...currentRows]);
-      setMessage(`تم رفع ${rows.length} نقطة من ${metadata.fileName}.`);
+      setPlannedRoutes((currentRoutes) => [...routes, ...currentRoutes]);
+      setMessage(`تم رفع ${rows.length} نقطة و${routes.length} مسار كابل من ${metadata.fileName}.`);
     } finally {
       setBusy(false);
     }
@@ -1973,7 +2077,10 @@ function App() {
       }
       const { error } = await supabase.from('planned_poles').delete().eq('batch_id', batchId);
       if (error) throw error;
+      const { error: routesError } = await supabase.from('planned_routes').delete().eq('batch_id', batchId);
+      if (routesError && routesError.code !== '42P01') throw routesError;
       setPlannedRows((currentRows) => currentRows.filter((row) => row.batch_id !== batchId));
+      setPlannedRoutes((currentRoutes) => currentRoutes.filter((row) => row.batch_id !== batchId));
       setMessage('تم حذف الدفعة والمنطقة المرفوعة بنجاح.');
     } finally {
       setBusy(false);
@@ -2425,11 +2532,11 @@ function App() {
   }
 
   if (profile.role === 'design') {
-    return <DesignWorkspace profile={profile} plannedRows={plannedRows} plantingRows={records.column_checks} onUpload={uploadPlannedPoints} onDeleteBatch={deletePlannedBatch} onRefresh={loadAll} onLogout={changeProfile} busy={busy} />;
+    return <DesignWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plantingRows={records.column_checks} onUpload={uploadPlannedPoints} onDeleteBatch={deletePlannedBatch} onRefresh={loadAll} onLogout={changeProfile} busy={busy} />;
   }
 
   if (profile.role === 'engineer') {
-    return <EngineerWorkspace profile={profile} plannedRows={plannedRows} technicians={technicianOptions} onRefresh={loadAll} onLogout={changeProfile} onValidate={validatePlannedPole} onMove={movePlannedPole} onDelete={deletePlannedPole} onAdd={addPlannedPole} busy={busy} />;
+    return <EngineerWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} technicians={technicianOptions} onRefresh={loadAll} onLogout={changeProfile} onValidate={validatePlannedPole} onMove={movePlannedPole} onDelete={deletePlannedPole} onAdd={addPlannedPole} busy={busy} />;
   }
 
   if (profile.role === 'supervisor') {
