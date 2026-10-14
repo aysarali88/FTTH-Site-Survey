@@ -24,7 +24,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { CircleMarker, LayersControl, MapContainer, Marker, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { CircleMarker, LayersControl, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
@@ -41,6 +41,7 @@ const AUTH_EMAIL_DOMAIN = 'site-survey.local';
 const IMPORT_BATCH_SIZE = 500;
 const MAX_IMPORTED_RECORDS_TO_RENDER = 500;
 const MAX_MAP_MARKERS = 2000;
+const MAX_IMPORTED_ASSETS_TO_RENDER = 3500;
 const MAX_TABLE_ROWS = 500;
 const CITY_DISTRICTS = {
   Misrata: ['مقاوبه', 'ولاد بعيو', 'راس عمار', 'البيره والتعليم', 'راس التوته', 'راس علي', 'المنقوش', 'ولاد ابو شعاله', 'رويسات', 'مقاصبه'],
@@ -625,42 +626,173 @@ function parseKmlCoordinates(raw) {
     .filter(Boolean);
 }
 
+function kmlStyleKey(placemark) {
+  return placemark.querySelector('styleUrl')?.textContent?.trim().replace(/^#/, '') || '';
+}
+
+function kmlStyleLabel(styleKey) {
+  return styleKey
+    .replace(/^style_/, '')
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isPlannedPoleStyle(styleKey) {
+  return /(?:new|planned)[_\s-]*poles?/i.test(styleKey);
+}
+
+function kmlColor(color, fallback = '#475569') {
+  const value = String(color || '').trim();
+  if (!/^[\da-f]{8}$/i.test(value)) return { color: fallback, opacity: 1 };
+  const alpha = Number.parseInt(value.slice(0, 2), 16) / 255;
+  const blue = value.slice(2, 4);
+  const green = value.slice(4, 6);
+  const red = value.slice(6, 8);
+  return { color: `#${red}${green}${blue}`, opacity: alpha };
+}
+
+function parseKmlStyle(styleNode) {
+  const iconStyle = styleNode.querySelector('IconStyle');
+  const labelStyle = styleNode.querySelector('LabelStyle');
+  const lineStyle = styleNode.querySelector('LineStyle');
+  const polyStyle = styleNode.querySelector('PolyStyle');
+  const iconColor = kmlColor(iconStyle?.querySelector('color')?.textContent, '#475569');
+  const labelColor = kmlColor(labelStyle?.querySelector('color')?.textContent, '#0f172a');
+  const lineColor = kmlColor(lineStyle?.querySelector('color')?.textContent, '#db2777');
+  const polygonColor = kmlColor(polyStyle?.querySelector('color')?.textContent, '#94a3b8');
+  const iconScale = Number(iconStyle?.querySelector('scale')?.textContent || 1);
+  const labelScale = Number(labelStyle?.querySelector('scale')?.textContent || 1);
+  const lineWidth = Number(lineStyle?.querySelector('width')?.textContent || 2);
+  return {
+    icon: {
+      href: iconStyle?.querySelector('Icon href')?.textContent?.trim() || '',
+      ...iconColor,
+      scale: Number.isFinite(iconScale) ? iconScale : 1,
+    },
+    label: { ...labelColor, scale: Number.isFinite(labelScale) ? labelScale : 1 },
+    line: { ...lineColor, width: Number.isFinite(lineWidth) ? lineWidth : 2 },
+    polygon: {
+      ...polygonColor,
+      fill: polyStyle?.querySelector('fill')?.textContent !== '0',
+      outline: polyStyle?.querySelector('outline')?.textContent !== '0',
+    },
+  };
+}
+
+function parseKmlExtendedData(placemark) {
+  const properties = {};
+  placemark.querySelectorAll('ExtendedData Data').forEach((node) => {
+    const key = node.getAttribute('name');
+    const value = node.querySelector('value')?.textContent?.trim();
+    if (key && value) properties[key] = value;
+  });
+  placemark.querySelectorAll('ExtendedData SimpleData').forEach((node) => {
+    const key = node.getAttribute('name');
+    const value = node.textContent?.trim();
+    if (key && value) properties[key] = value;
+  });
+  return properties;
+}
+
+function parseKmlGeometryNode(node) {
+  const geometryType = node.localName;
+  if (geometryType === 'Point') {
+    const coordinate = parseKmlCoordinates(node.querySelector('coordinates')?.textContent || '')[0];
+    return coordinate ? [{ geometry_type: 'point', coordinates: coordinate }] : [];
+  }
+  if (geometryType === 'LineString') {
+    const coordinates = parseKmlCoordinates(node.querySelector('coordinates')?.textContent || '');
+    return coordinates.length >= 2 ? [{ geometry_type: 'line', coordinates }] : [];
+  }
+  if (geometryType === 'Polygon') {
+    const rings = Array.from(node.querySelectorAll('LinearRing coordinates'))
+      .map((ring) => parseKmlCoordinates(ring.textContent || ''))
+      .filter((ring) => ring.length >= 3);
+    return rings.length ? [{ geometry_type: 'polygon', coordinates: rings.length === 1 ? rings[0] : rings }] : [];
+  }
+  if (geometryType === 'MultiGeometry') {
+    return Array.from(node.children).flatMap((child) => parseKmlGeometryNode(child));
+  }
+  return [];
+}
+
+function parseKmlPlacemarkGeometries(placemark) {
+  return Array.from(placemark.children)
+    .filter((child) => ['Point', 'LineString', 'Polygon', 'MultiGeometry'].includes(child.localName))
+    .flatMap((child) => parseKmlGeometryNode(child));
+}
+
 function parseKmlDocument(text) {
   const xml = new DOMParser().parseFromString(text, 'application/xml');
   if (xml.querySelector('parsererror')) throw new Error('ملف KML غير صالح.');
   const points = [];
   const paths = [];
+  const assets = [];
   let pointIndex = 0;
   let pathIndex = 0;
-  xml.querySelectorAll('Placemark').forEach((placemark, index) => {
-    const coordinateNode = placemark.querySelector('Point coordinates');
-    const raw = coordinateNode?.textContent?.trim() || '';
-    const firstCoordinate = parseKmlCoordinates(raw)[0];
-    const name = placemark.querySelector('name')?.textContent?.trim() || '';
-    if (firstCoordinate) {
-      const [latitude, longitude] = firstCoordinate;
-      pointIndex += 1;
-      points.push({
-        id: `PLAN-${Date.now()}-${String(pointIndex).padStart(4, '0')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
-        latitude,
-        longitude,
-        point_name: name || `Point ${pointIndex}`,
-      });
+  let assetIndex = 0;
+  const placemarks = Array.from(xml.querySelectorAll('Placemark'));
+  const hasStyledFeatures = placemarks.some((placemark) => Boolean(kmlStyleKey(placemark)));
+  const styles = new Map(Array.from(xml.querySelectorAll('Style[id]')).map((node) => [node.id, parseKmlStyle(node)]));
+  const styleMaps = new Map(Array.from(xml.querySelectorAll('StyleMap[id]')).map((node) => {
+    const normal = Array.from(node.querySelectorAll('Pair')).find((pair) => pair.querySelector('key')?.textContent?.trim() === 'normal');
+    return [node.id, normal?.querySelector('styleUrl')?.textContent?.trim().replace(/^#/, '') || ''];
+  }));
+  function styleDataFor(key) {
+    let resolvedKey = key;
+    const visited = new Set();
+    while (styleMaps.has(resolvedKey) && !visited.has(resolvedKey)) {
+      visited.add(resolvedKey);
+      resolvedKey = styleMaps.get(resolvedKey);
     }
-
-    placemark.querySelectorAll('LineString coordinates').forEach((lineNode, lineIndex) => {
-      const coordinates = parseKmlCoordinates(lineNode.textContent || '');
-      if (coordinates.length < 2) return;
-      pathIndex += 1;
-      paths.push({
-        id: `ROUTE-${Date.now()}-${String(pathIndex).padStart(4, '0')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
-        path_name: name || `Cable route ${pathIndex}`,
-        path_part: lineIndex + 1,
-        coordinates,
+    return styles.get(resolvedKey) || {};
+  }
+  placemarks.forEach((placemark) => {
+    const name = placemark.querySelector('name')?.textContent?.trim() || '';
+    const styleKey = kmlStyleKey(placemark);
+    const styleLabel = kmlStyleLabel(styleKey);
+    const styleData = styleDataFor(styleKey);
+    const properties = parseKmlExtendedData(placemark);
+    const featureName = name || properties.ID || properties.Id || properties.id || styleLabel;
+    parseKmlPlacemarkGeometries(placemark).forEach((geometry, geometryIndex) => {
+      if (geometry.geometry_type === 'point' && (isPlannedPoleStyle(styleKey) || (!styleKey && !hasStyledFeatures))) {
+        const [latitude, longitude] = geometry.coordinates;
+        pointIndex += 1;
+        points.push({
+          id: `PLAN-${Date.now()}-${String(pointIndex).padStart(4, '0')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+          latitude,
+          longitude,
+          point_name: name || properties.ID || properties.Id || properties.id || `Point ${pointIndex}`,
+        });
+        return;
+      }
+      if (geometry.geometry_type === 'line') {
+        pathIndex += 1;
+        paths.push({
+          id: `ROUTE-${Date.now()}-${String(pathIndex).padStart(4, '0')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+          path_name: name || properties.ID || properties.Id || properties.id || styleLabel || `Cable route ${pathIndex}`,
+          path_part: geometryIndex + 1,
+          style_key: styleKey,
+          style_data: styleData,
+          properties,
+          coordinates: geometry.coordinates,
+        });
+        return;
+      }
+      assetIndex += 1;
+      assets.push({
+        id: `ASSET-${Date.now()}-${String(assetIndex).padStart(4, '0')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+        asset_type: geometry.geometry_type,
+        asset_name: featureName || `Imported feature ${assetIndex}`,
+        style_key: styleKey,
+        style_data: styleData,
+        properties,
+        coordinates: geometry.coordinates,
       });
     });
   });
-  return { points, paths };
+  return { points, paths, assets };
 }
 
 function buildRowsFromWorkbook(workbook) {
@@ -838,26 +970,106 @@ function CablePaths({ paths = [] }) {
     <Polyline
       key={path.id}
       positions={path.coordinates || []}
-      pathOptions={{ color: '#ec4899', opacity: 0.95, weight: 4, dashArray: '10 7' }}
+      pathOptions={{ color: path.style_data?.line?.color || importedAssetMeta(path).color, opacity: (path.style_data?.line?.opacity ?? 1) * 0.95, weight: Math.max(2, Math.min(Number(path.style_data?.line?.width) || 4, 8)) }}
     >
+      {path.style_data?.label?.scale > 0 && <Tooltip permanent direction="center">{path.path_name || 'Cable route'}</Tooltip>}
       <Popup>
         <div className="mapPointPopup" dir="rtl">
           <strong>{path.path_name || 'Cable route'}</strong>
           <span>مسار كابل</span>
+          {Object.entries(path.properties || {}).slice(0, 8).map(([key, value]) => <span key={key}><b>{key}:</b> {value}</span>)}
         </div>
       </Popup>
     </Polyline>
   ));
 }
 
-function MapFitToContent({ rows = [], paths = [] }) {
+function importedAssetMeta(asset = {}) {
+  const key = `${asset.style_key || ''} ${asset.asset_name || asset.path_name || ''}`.toLowerCase();
+  let fallback;
+  if (key.includes('building')) fallback = { color: '#f97316', fillColor: '#fb923c', label: 'Buildings' };
+  else if (key.includes('new') && key.includes('pole')) fallback = { color: '#16a34a', fillColor: '#22c55e', label: 'New poles' };
+  else if (key.includes('pole')) fallback = { color: '#2563eb', fillColor: '#60a5fa', label: 'Poles' };
+  else if (key.includes('customer')) fallback = { color: '#64748b', fillColor: '#94a3b8', label: 'Customers' };
+  else if (key.includes('box') || key.includes('core') || key.includes('hub')) fallback = { color: '#7c3aed', fillColor: '#a78bfa', label: 'Boxes' };
+  else if (key.includes('tree')) fallback = { color: '#15803d', fillColor: '#4ade80', label: 'Trees' };
+  else if (key.includes('problem') || key.includes('probleme')) fallback = { color: '#dc2626', fillColor: '#f87171', label: 'Problems' };
+  else if (key.includes('cable') || key.includes('route') || key.includes('feeder')) fallback = { color: '#db2777', fillColor: '#f472b6', label: 'Cable routes' };
+  else fallback = { color: '#475569', fillColor: '#94a3b8', label: 'Imported design' };
+  const style = asset.style_data || {};
+  return {
+    ...fallback,
+    color: style.icon?.color || style.line?.color || style.polygon?.color || fallback.color,
+    fillColor: style.polygon?.color || style.icon?.color || fallback.fillColor,
+    opacity: style.icon?.opacity ?? style.line?.opacity ?? style.polygon?.opacity ?? 1,
+    labelScale: Number(style.label?.scale) || 0,
+    iconScale: Number(style.icon?.scale) || 1,
+    fill: style.polygon?.fill !== false,
+    outline: style.polygon?.outline !== false,
+  };
+}
+
+function flattenMapCoordinates(value) {
+  if (!Array.isArray(value)) return [];
+  if (typeof value[0] === 'number' && typeof value[1] === 'number') return [[Number(value[0]), Number(value[1])]];
+  return value.flatMap((item) => flattenMapCoordinates(item));
+}
+
+function ImportedDesignAssets({ assets = [] }) {
+  return assets.slice(0, MAX_IMPORTED_ASSETS_TO_RENDER).map((asset) => {
+    const meta = importedAssetMeta(asset);
+    const label = asset.asset_name || asset.properties?.ID || asset.properties?.Id || asset.properties?.id || meta.label;
+    const popup = (
+      <Popup>
+        <div className="mapPointPopup" dir="rtl">
+          <strong>{label}</strong>
+          <span>{meta.label}</span>
+          {asset.style_key && <span>{asset.style_key}</span>}
+          {Object.entries(asset.properties || {}).slice(0, 12).map(([key, value]) => <span key={key}><b>{key}:</b> {value}</span>)}
+        </div>
+      </Popup>
+    );
+    if (asset.asset_type === 'line') {
+      return <Polyline key={asset.id} positions={asset.coordinates || []} pathOptions={{ color: asset.style_data?.line?.color || meta.color, opacity: asset.style_data?.line?.opacity ?? 0.72, weight: Math.max(1, Math.min(Number(asset.style_data?.line?.width) || 2, 8)) }}>{asset.style_data?.label?.scale > 0 && <Tooltip permanent direction="center">{label}</Tooltip>}{popup}</Polyline>;
+    }
+    if (asset.asset_type === 'polygon') {
+      return <Polygon key={asset.id} positions={asset.coordinates || []} pathOptions={{ color: meta.color, fillColor: meta.fillColor, fillOpacity: meta.fill ? meta.opacity : 0, opacity: meta.outline ? meta.opacity : 0, weight: 1 }}>{asset.style_data?.label?.scale > 0 && <Tooltip permanent>{label}</Tooltip>}{popup}</Polygon>;
+    }
+    const iconHref = asset.style_data?.icon?.href || '';
+    if (iconHref && !/placemark_circle\.png$/i.test(iconHref)) {
+      const size = Math.max(14, Math.min(40, 28 * meta.iconScale));
+      const icon = L.icon({
+        iconUrl: iconHref.replace(/^http:\/\//i, 'https://'),
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2],
+        popupAnchor: [0, -size / 2],
+      });
+      return <Marker key={asset.id} position={asset.coordinates || []} icon={icon} opacity={meta.opacity}>{meta.labelScale > 0 && <Tooltip permanent direction="right" offset={[5, 0]}>{label}</Tooltip>}{popup}</Marker>;
+    }
+    return (
+      <CircleMarker
+        key={asset.id}
+        center={asset.coordinates || []}
+        radius={Math.max(3, Math.min(7, (meta.label === 'Buildings' ? 4 : 5) * Math.min(meta.iconScale, 1.4)))}
+        renderer={canvasRenderer}
+        pathOptions={{ color: '#ffffff', fillColor: meta.fillColor, fillOpacity: meta.opacity * 0.86, opacity: 0.9, weight: 1.5 }}
+      >
+        {meta.labelScale > 0 && <Tooltip permanent direction="right" offset={[5, 0]}>{label}</Tooltip>}
+        {popup}
+      </CircleMarker>
+    );
+  });
+}
+
+function MapFitToContent({ rows = [], paths = [], assets = [] }) {
   const map = useMap();
   const signature = useMemo(
     () => JSON.stringify({
       rows: rows.map((row) => [row.latitude, row.longitude]),
       paths: paths.map((path) => path.coordinates),
+      assets: assets.map((asset) => asset.coordinates),
     }),
-    [rows, paths],
+    [rows, paths, assets],
   );
 
   useEffect(() => {
@@ -865,7 +1077,8 @@ function MapFitToContent({ rows = [], paths = [] }) {
       .map((row) => [Number(row.latitude), Number(row.longitude)])
       .filter(([latitude, longitude]) => Number.isFinite(latitude) && Number.isFinite(longitude));
     const routePoints = paths.flatMap((path) => path.coordinates || []);
-    const allPoints = [...points, ...routePoints];
+    const assetPoints = assets.flatMap((asset) => flattenMapCoordinates(asset.coordinates));
+    const allPoints = [...points, ...routePoints, ...assetPoints];
     if (allPoints.length < 2) return;
     const bounds = L.latLngBounds(allPoints);
     if (bounds.isValid()) map.fitBounds(bounds.pad(0.12), { maxZoom: 18, animate: false });
@@ -1095,7 +1308,7 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = 
   );
 }
 
-function DesignWorkspace({ profile, plannedRows, plannedRoutes, plantingRows, onUpload, onDeleteBatch, onRefresh, onLogout, busy }) {
+function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = [], plantingRows, onUpload, onDeleteBatch, onRefresh, onLogout, busy }) {
   const [city, setCity] = useState(profile.city || 'Misrata');
   const [district, setDistrict] = useState(profile.district || '');
   const [error, setError] = useState('');
@@ -1111,9 +1324,9 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plantingRows, on
     setError('');
     try {
       const text = await readKmlFromFile(file);
-       const { points, paths } = parseKmlDocument(text);
-       if (!points.length && !paths.length) throw new Error('لم يتم العثور على نقاط أو مسارات داخل الملف.');
-       await onUpload(points, { city, district, fileName: file.name, paths });
+       const { points, paths, assets } = parseKmlDocument(text);
+       if (!points.length && !paths.length && !assets.length) throw new Error('لم يتم العثور على عناصر داخل الملف.');
+       await onUpload(points, { city, district, fileName: file.name, paths, assets });
     } catch (uploadError) {
       setError(uploadError.message);
     }
@@ -1122,10 +1335,11 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plantingRows, on
   const pending = plannedRows.filter((row) => row.validation_status === 'pending').length;
   const validated = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status)).length;
   const previewRows = plannedRows.slice(0, MAX_MAP_MARKERS);
+  const previewAssets = plannedAssets.slice(0, MAX_IMPORTED_ASSETS_TO_RENDER);
   const districtOptions = CITY_DISTRICTS[city] || [];
   const batches = useMemo(() => {
     const grouped = new Map();
-    [...plannedRows, ...plannedRoutes].forEach((row) => {
+    [...plannedRows, ...plannedRoutes, ...plannedAssets].forEach((row) => {
       if (!row.batch_id) return;
       const current = grouped.get(row.batch_id) || {
         batchId: row.batch_id,
@@ -1133,17 +1347,19 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plantingRows, on
         district: row.district || '-',
         count: 0,
         routeCount: 0,
+        assetCount: 0,
         hasPlanted: false,
         latest: row.created_at || '',
       };
-      if (row.latitude !== undefined) current.count += 1;
+      if (row.asset_type) current.assetCount += 1;
+      else if (row.latitude !== undefined) current.count += 1;
       else current.routeCount += 1;
       current.hasPlanted = current.hasPlanted || row.validation_status === 'planted' || row.is_planted;
       if (row.created_at > current.latest) current.latest = row.created_at;
       grouped.set(row.batch_id, current);
     });
     return Array.from(grouped.values()).sort((a, b) => String(b.latest).localeCompare(String(a.latest)));
-  }, [plannedRows, plannedRoutes]);
+  }, [plannedRows, plannedRoutes, plannedAssets]);
 
   const previewRoutes = plannedRoutes.slice(0, MAX_MAP_MARKERS);
 
@@ -1159,13 +1375,13 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plantingRows, on
       </header>
 
       <section className="stats">
-        <article><Upload size={19} /><span>Imported points / cable routes</span><strong>{plannedRows.length} / {plannedRoutes.length}</strong></article>
+        <article><Upload size={19} /><span>Imported poles / design features</span><strong>{plannedRows.length} / {plannedAssets.length}</strong></article>
         <article><Target size={19} /><span>Pending validation</span><strong>{pending}</strong></article>
         <article><CheckCircle2 size={19} /><span>Validated / planted</span><strong>{validated}</strong></article>
       </section>
 
       <section className="records" style={{ padding: 20, marginBottom: 16 }}>
-        <div className="recordsHeader"><div><h2>Upload KMZ plan</h2><span>Files are stored as pending validation points.</span></div></div>
+        <div className="recordsHeader"><div><h2>Upload KMZ plan</h2><span>New poles go to validation; other design features stay as map references.</span></div></div>
         <div className="fieldGrid" style={{ marginTop: 14 }}>
           <label>City<select value={city} onChange={(event) => { setCity(event.target.value); setDistrict(''); }}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label>
           <label>District<select required value={district} onChange={(event) => setDistrict(event.target.value)}><option value="">Choose district...</option>{districtOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
@@ -1179,12 +1395,12 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plantingRows, on
 
        {!!batches.length && <section className="records designBatchCard" style={{ marginBottom: 16 }}>
         <div className="recordsHeader"><div><h2>Uploaded areas</h2><span>Delete only a selected uploaded batch.</span></div><span>{batches.length} batches</span></div>
-        <div className="batchList">{batches.map((batch) => <div className="batchRow" key={batch.batchId}><div><strong>{batch.city} · {batch.district}</strong><span>{batch.count} points · {batch.routeCount} cable routes · {batch.batchId}</span></div><button className="dangerMini" type="button" disabled={busy || batch.hasPlanted} title={batch.hasPlanted ? 'Cannot delete a batch with planted points' : 'Delete batch'} onClick={async () => { if (!window.confirm(`Delete ${batch.count} points and ${batch.routeCount} cable routes from ${batch.city} / ${batch.district}?`)) return; setError(''); try { await onDeleteBatch(batch.batchId); } catch (deleteError) { setError(deleteError.message); } }}><Trash2 size={16} /> Delete</button></div>)}</div>
+        <div className="batchList">{batches.map((batch) => <div className="batchRow" key={batch.batchId}><div><strong>{batch.city} · {batch.district}</strong><span>{batch.count} poles · {batch.assetCount} design features · {batch.routeCount} cable routes · {batch.batchId}</span></div><button className="dangerMini" type="button" disabled={busy || batch.hasPlanted} title={batch.hasPlanted ? 'Cannot delete a batch with planted points' : 'Delete batch'} onClick={async () => { if (!window.confirm(`Delete ${batch.count} poles, ${batch.assetCount} design features and ${batch.routeCount} cable routes from ${batch.city} / ${batch.district}?`)) return; setError(''); try { await onDeleteBatch(batch.batchId); } catch (deleteError) { setError(deleteError.message); } }}><Trash2 size={16} /> Delete</button></div>)}</div>
       </section>}
 
-       {(plannedRows.length || plannedRoutes.length) > 0 && <section className="records designMapCard" style={{ marginBottom: 16 }}>
-        <div className="recordsHeader"><div><h2>Map preview</h2><span>Imported points and cable routes are shown before validation.</span></div><span>{previewRows.length} points · {previewRoutes.length} cable routes</span></div>
-        <div className="designPreviewMap"><EngineerMap rows={previewRows} paths={previewRoutes} selectedId="" onSelect={() => {}} onMapClick={() => {}} /></div>
+       {(plannedRows.length || plannedRoutes.length || plannedAssets.length) > 0 && <section className="records designMapCard" style={{ marginBottom: 16 }}>
+        <div className="recordsHeader"><div><h2>Map preview</h2><span>Poles, buildings, boxes and cable routes are shown from the uploaded design.</span></div><span>{previewRows.length} poles · {previewAssets.length} features · {previewRoutes.length} routes</span></div>
+        <div className="designPreviewMap"><EngineerMap rows={previewRows} paths={previewRoutes} assets={previewAssets} selectedId="" onSelect={() => {}} onMapClick={() => {}} /></div>
       </section>}
 
       <section className="records">
@@ -1230,19 +1446,21 @@ function engineerPointIcon(color, selected) {
   });
 }
 
-function EngineerMap({ rows, paths = [], selectedId, onSelect, onMapClick, onMovePoint, addMode = false, moveMode = false }) {
+function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMapClick, onMovePoint, addMode = false, moveMode = false }) {
   const first = rows.find((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)));
   const firstPathPoint = paths.flatMap((path) => path.coordinates || [])[0];
+  const firstAssetPoint = assets.flatMap((asset) => flattenMapCoordinates(asset.coordinates))[0];
   const center = first
     ? [Number(first.latitude), Number(first.longitude)]
-    : firstPathPoint || [defaultLocation.latitude, defaultLocation.longitude];
+    : firstPathPoint || firstAssetPoint || [defaultLocation.latitude, defaultLocation.longitude];
   return (
     <MapContainer center={center} zoom={14} maxZoom={22} scrollWheelZoom className="map" zoomControl rotate touchRotate rotateControl={{ closeOnZeroBearing: false, position: 'topright' }} bearing={0}>
       <MapLayers />
       <CurrentLocationControl />
       <MapResizeSync expanded={false} />
-      <MapFitToContent rows={rows} paths={paths} />
+      <MapFitToContent rows={rows} paths={paths} assets={assets} />
       <EngineerMapClickHandler enabled={addMode} onMapClick={onMapClick} />
+      <ImportedDesignAssets assets={assets} />
       <CablePaths paths={paths} />
       {rows.map((row) => {
         const statusColor = row.validation_status === 'validated' ? '#2563eb' : row.validation_status === 'planted' ? '#16a34a' : row.validation_status === 'rejected' ? '#dc2626' : '#f59e0b';
@@ -1282,7 +1500,7 @@ function EngineerMap({ rows, paths = [], selectedId, onSelect, onMapClick, onMov
   );
 }
 
-function EngineerWorkspace({ profile, plannedRows, plannedRoutes, technicians, onRefresh, onLogout, onValidate, onMove, onDelete, onAdd, busy }) {
+function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = [], technicians, onRefresh, onLogout, onValidate, onMove, onDelete, onAdd, busy }) {
   const [selectedId, setSelectedId] = useState(plannedRows[0]?.id || '');
   const [status, setStatus] = useState('validated');
   const [rememberedAssignedTo, setRememberedAssignedTo] = useState(() => {
@@ -1392,7 +1610,7 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, technicians, o
         <Menu size={24} />
       </button>
       <section className="workspace">
-         <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} paths={plannedRoutes} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} onMovePoint={handleMovePoint} addMode={addMode} moveMode={moveMode} />{addMode && <div className="mapAddHint">Click on the map to place a new point</div>}{moveMode && <><button className="mapMoveFinishButton" type="button" onClick={() => setMoveMode(false)}>Finish editing location</button><div className="mapMoveHint">Drag the selected point to the correct location.</div></>}<div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div></div>
+         <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} paths={plannedRoutes} assets={plannedAssets} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} onMovePoint={handleMovePoint} addMode={addMode} moveMode={moveMode} />{addMode && <div className="mapAddHint">Click on the map to place a new point</div>}{moveMode && <><button className="mapMoveFinishButton" type="button" onClick={() => setMoveMode(false)}>Finish editing location</button><div className="mapMoveHint">Drag the selected point to the correct location.</div></>}<div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div></div>
         <section id="engineer-controls" className={`panel engineerControls ${controlsOpen ? 'open' : ''}`}>
           <div className="panelHeader"><div><p>Engineer review</p><h2>Validation queue</h2><span className="autoId">{plannedRows.length} planned points</span></div><Target color="#2563eb" /></div>
           {selected && <><div className="pointDetails"><div><span>Point</span><strong>{selected.point_name || selected.id}</strong></div><div><span>Area / City</span><strong>{selected.city || '-'}</strong></div><div><span>District</span><strong>{selected.district || '-'}</strong></div><div><span>Status</span><strong>{selected.validation_status || '-'}</strong></div></div><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><button className={`ghost moveLocationButton${moveMode ? ' active' : ''}`} type="button" onClick={toggleMoveMode} disabled={busy}><MapPin size={17} />{moveMode ? 'Finish editing location' : 'Edit location'}</button>{moveMode && <div className="moveLocationHint">Drag the selected point to the correct location.</div>}<label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label>{status === 'validated' && <label>Assign technician<select value={assignedTo} onChange={(event) => rememberTechnician(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>}<label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy || (status === 'validated' && !assignedTo)}>Save decision</button><button className="dangerMini engineerDeleteButton" type="button" onClick={deleteSelected} disabled={busy || selected.validation_status === 'planted'}><Trash2 size={17} /> Delete point</button></>}
@@ -1404,7 +1622,7 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, technicians, o
   );
 }
 
-function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, busy }) {
+function LegacyTechnicianWorkspace({ assignments, records, plannedRoutes = [], plannedAssets = [], onAdd, onSwitchMode, busy }) {
   const activeAssignments = (assignments || []).filter((assignment) => assignment.active !== false);
   const [selectedAreaId, setSelectedAreaId] = useState(activeAssignments[0]?.id || '');
   const [location, setLocation] = useState(defaultLocation);
@@ -1485,7 +1703,10 @@ function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, 
           <MapLayers />
           <CurrentLocationControl onLocated={(next) => { setLocation(next); setMessage('تم تحديد موقعك الحالي.'); }} />
           <MapCenterSync value={location} onChange={setLocation} />
+          <MapFitToContent rows={mapRows} paths={plannedRoutes} assets={plannedAssets} />
           <MapResizeSync expanded={false} />
+          <ImportedDesignAssets assets={plannedAssets} />
+          <CablePaths paths={plannedRoutes} />
           <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} />
         </MapContainer>
         <div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div>
@@ -1520,7 +1741,7 @@ function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, 
   );
 }
 
-function SupervisorWorkspace({ profile, plannedRows, legacyAssignments = [], legacyRecords = [], onRefresh, onLogout, onPlant, onLegacyAdd, busy }) {
+function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], plannedAssets = [], legacyAssignments = [], legacyRecords = [], onRefresh, onLogout, onPlant, onLegacyAdd, busy }) {
   const available = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status) && (profile.role === 'supervisor' || row.assigned_to === profile.username || row.assigned_to === profile.techName));
   const [selectedId, setSelectedId] = useState(available[0]?.id || '');
   const [hasObjection, setHasObjection] = useState('لا');
@@ -1565,9 +1786,9 @@ function SupervisorWorkspace({ profile, plannedRows, legacyAssignments = [], leg
       {workflowMode === 'validated' && <button className="engineerPanelToggle" type="button" onClick={() => setControlsOpen((value) => !value)} aria-expanded={controlsOpen} aria-controls="supervisor-controls" aria-label={controlsOpen ? 'إخفاء لوحة الفني' : 'إظهار لوحة الفني'}>
         <Menu size={24} />
       </button>}
-      {isTechnician && workflowMode === 'legacy' ? <LegacyTechnicianWorkspace assignments={legacyAssignments} records={legacyRecords} onAdd={onLegacyAdd} onSwitchMode={() => setWorkflowMode('validated')} busy={busy} /> : <>
+      {isTechnician && workflowMode === 'legacy' ? <LegacyTechnicianWorkspace assignments={legacyAssignments} records={legacyRecords} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} onAdd={onLegacyAdd} onSwitchMode={() => setWorkflowMode('validated')} busy={busy} /> : <>
       <section className="workspace">
-      <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} selectedId={selectedId} onSelect={setSelectedId} onMapClick={() => {}} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
+      <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} paths={plannedRoutes} assets={plannedAssets} selectedId={selectedId} onSelect={setSelectedId} onMapClick={() => {}} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
       <section id="supervisor-controls" className={`records panel supervisorControls ${controlsOpen ? 'open' : ''}`} style={{ padding: 20 }}>
         {isTechnician && <div className="mobileWorkflowTabs"><button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => switchWorkflowMode('validated')}>Assigned validated points</button><button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => switchWorkflowMode('legacy')}>Legacy areas</button></div>}
         <div className="recordsHeader"><div><h2>Validated planting points</h2><span>Only engineer-approved points are shown.</span></div></div>
@@ -1695,6 +1916,7 @@ function App() {
   const [records, setRecords] = useState({ buildings: [], poles: [], column_checks: [] });
   const [plannedRows, setPlannedRows] = useState([]);
   const [plannedRoutes, setPlannedRoutes] = useState([]);
+  const [plannedAssets, setPlannedAssets] = useState([]);
   const [legacyAssignments, setLegacyAssignments] = useState([]);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
@@ -1989,6 +2211,12 @@ function App() {
         .order('created_at', { ascending: false })
         .limit(2000);
       if (routesError && routesError.code !== '42P01') throw routesError;
+      const { data: assets, error: assetsError } = await supabase
+        .from('planned_assets')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(5000);
+      if (assetsError && assetsError.code !== '42P01') throw assetsError;
       if (['admin', 'design', 'engineer', 'tech'].includes(profile?.role)) {
         const { data: assignments, error: assignmentsError } = await supabase
           .from('legacy_area_assignments')
@@ -2022,6 +2250,7 @@ function App() {
       setRecords(districtResult.normalized);
       setPlannedRows(planned || []);
       setPlannedRoutes(routes || []);
+      setPlannedAssets(assets || []);
       setMessage('تم تحديث البيانات بنجاح.');
     } catch (error) {
       setMessage(`تعذر تحميل البيانات: ${error.message}`);
@@ -2050,6 +2279,13 @@ function App() {
         created_by: profile.username || profile.techName,
         batch_id: batchId,
       }));
+      const assets = (metadata.assets || []).map((asset) => ({
+        ...asset,
+        city: metadata.city,
+        district: resolveDistrict(metadata.district, metadata.city, records) || null,
+        created_by: profile.username || profile.techName,
+        batch_id: batchId,
+      }));
       if (rows.length) {
         const { error } = await supabase.from('planned_poles').insert(rows);
         if (error) throw error;
@@ -2061,9 +2297,18 @@ function App() {
           throw error;
         }
       }
+      if (assets.length) {
+        const { error } = await supabase.from('planned_assets').insert(assets);
+        if (error) {
+          if (rows.length) await supabase.from('planned_poles').delete().eq('batch_id', batchId);
+          if (routes.length) await supabase.from('planned_routes').delete().eq('batch_id', batchId);
+          throw error;
+        }
+      }
       setPlannedRows((currentRows) => [...rows, ...currentRows]);
       setPlannedRoutes((currentRoutes) => [...routes, ...currentRoutes]);
-      setMessage(`تم رفع ${rows.length} نقطة و${routes.length} مسار كابل من ${metadata.fileName}.`);
+      setPlannedAssets((currentAssets) => [...assets, ...currentAssets]);
+      setMessage(`تم رفع ${rows.length} نقطة و${assets.length} عنصر تصميم و${routes.length} مسار كابل من ${metadata.fileName}.`);
     } finally {
       setBusy(false);
     }
@@ -2082,8 +2327,11 @@ function App() {
       if (error) throw error;
       const { error: routesError } = await supabase.from('planned_routes').delete().eq('batch_id', batchId);
       if (routesError && routesError.code !== '42P01') throw routesError;
+      const { error: assetsError } = await supabase.from('planned_assets').delete().eq('batch_id', batchId);
+      if (assetsError && assetsError.code !== '42P01') throw assetsError;
       setPlannedRows((currentRows) => currentRows.filter((row) => row.batch_id !== batchId));
       setPlannedRoutes((currentRoutes) => currentRoutes.filter((row) => row.batch_id !== batchId));
+      setPlannedAssets((currentAssets) => currentAssets.filter((row) => row.batch_id !== batchId));
       setMessage('تم حذف الدفعة والمنطقة المرفوعة بنجاح.');
     } finally {
       setBusy(false);
@@ -2543,19 +2791,19 @@ function App() {
   }
 
   if (profile.role === 'design') {
-    return <DesignWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plantingRows={records.column_checks} onUpload={uploadPlannedPoints} onDeleteBatch={deletePlannedBatch} onRefresh={loadAll} onLogout={changeProfile} busy={busy} />;
+    return <DesignWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} plantingRows={records.column_checks} onUpload={uploadPlannedPoints} onDeleteBatch={deletePlannedBatch} onRefresh={loadAll} onLogout={changeProfile} busy={busy} />;
   }
 
   if (profile.role === 'engineer') {
-    return <EngineerWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} technicians={technicianOptions} onRefresh={loadAll} onLogout={changeProfile} onValidate={validatePlannedPole} onMove={movePlannedPole} onDelete={deletePlannedPole} onAdd={addPlannedPole} busy={busy} />;
+    return <EngineerWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} technicians={technicianOptions} onRefresh={loadAll} onLogout={changeProfile} onValidate={validatePlannedPole} onMove={movePlannedPole} onDelete={deletePlannedPole} onAdd={addPlannedPole} busy={busy} />;
   }
 
   if (profile.role === 'supervisor') {
-    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} legacyRecords={records.column_checks} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} busy={busy} />;
+    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} legacyRecords={records.column_checks} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} busy={busy} />;
   }
 
   if (profile.role === 'tech' && profile.username) {
-    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} legacyAssignments={legacyAssignments} legacyRecords={records.column_checks} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} onLegacyAdd={addLegacyPlanting} busy={busy} />;
+    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} legacyAssignments={legacyAssignments} legacyRecords={records.column_checks} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} onLegacyAdd={addLegacyPlanting} busy={busy} />;
   }
 
   return (
