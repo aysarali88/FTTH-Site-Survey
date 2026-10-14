@@ -1416,6 +1416,10 @@ button:disabled {
   z-index: 800;
 }
 
+.leaflet-top.leaflet-right {
+  top: 110px;
+}
+
 .mapLocationControl button {
   align-items: center;
   background: #ffffff;
