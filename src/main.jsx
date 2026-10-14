@@ -1324,7 +1324,7 @@ function EngineerWorkspace({ profile, plannedRows, technicians, onRefresh, onLog
   );
 }
 
-function LegacyTechnicianWorkspace({ assignments, records, onAdd, busy }) {
+function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, busy }) {
   const activeAssignments = (assignments || []).filter((assignment) => assignment.active !== false);
   const [selectedAreaId, setSelectedAreaId] = useState(activeAssignments[0]?.id || '');
   const [location, setLocation] = useState(defaultLocation);
@@ -1416,6 +1416,7 @@ function LegacyTechnicianWorkspace({ assignments, records, onAdd, busy }) {
         <div className="recordsHeader">
           <div><h2>Legacy planting</h2><span>إضافة مباشرة للمناطق التي بدأ العمل فيها سابقًا</span></div>
         </div>
+        {onSwitchMode && <div className="mobileWorkflowTabs"><button type="button" onClick={onSwitchMode}>Assigned validated points</button></div>}
         <label style={{ marginTop: 14 }}>Assigned area
           <select value={selectedArea?.id || ''} onChange={(event) => setSelectedAreaId(event.target.value)}>
             {activeAssignments.map((assignment) => <option key={assignment.id} value={assignment.id}>{assignment.city} · {assignment.district}</option>)}
@@ -1478,10 +1479,11 @@ function SupervisorWorkspace({ profile, plannedRows, legacyAssignments = [], leg
       {workflowMode === 'validated' && <button className="engineerPanelToggle" type="button" onClick={() => setControlsOpen((value) => !value)} aria-expanded={controlsOpen} aria-controls="supervisor-controls" aria-label={controlsOpen ? 'إخفاء لوحة الفني' : 'إظهار لوحة الفني'}>
         <Menu size={24} />
       </button>}
-      {isTechnician && workflowMode === 'legacy' ? <LegacyTechnicianWorkspace assignments={legacyAssignments} records={legacyRecords} onAdd={onLegacyAdd} busy={busy} /> : <>
+      {isTechnician && workflowMode === 'legacy' ? <LegacyTechnicianWorkspace assignments={legacyAssignments} records={legacyRecords} onAdd={onLegacyAdd} onSwitchMode={() => setWorkflowMode('validated')} busy={busy} /> : <>
       <section className="workspace">
       <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} selectedId={selectedId} onSelect={setSelectedId} onMapClick={() => {}} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
       <section id="supervisor-controls" className={`records panel supervisorControls ${controlsOpen ? 'open' : ''}`} style={{ padding: 20 }}>
+        {isTechnician && legacyAssignments.length > 0 && <div className="mobileWorkflowTabs"><button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => setWorkflowMode('validated')}>Assigned validated points</button><button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => setWorkflowMode('legacy')}>Legacy areas</button></div>}
         <div className="recordsHeader"><div><h2>Validated planting points</h2><span>Only engineer-approved points are shown.</span></div></div>
         <label style={{ marginTop: 14 }}>Point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{available.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} - {row.validation_status}</option>)}</select></label>
         {selected && <>

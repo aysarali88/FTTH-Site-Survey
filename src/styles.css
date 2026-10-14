@@ -1018,6 +1018,10 @@ button:disabled {
   color: #ffffff;
 }
 
+.mobileWorkflowTabs {
+  display: none;
+}
+
 .legacyWorkspace {
   grid-template-columns: minmax(0, 1.2fr) minmax(380px, 0.8fr);
 }
@@ -2652,6 +2656,26 @@ td {
     font-size: 11px;
     min-height: 38px;
     padding: 7px 10px;
+  }
+
+  .mobileWorkflowTabs {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .mobileWorkflowTabs button {
+    background: #f8fafc;
+    border: 1px solid #dbe4ef;
+    color: #334155;
+    min-height: 44px;
+    width: 100%;
+  }
+
+  .mobileWorkflowTabs button.active {
+    background: #0f172a;
+    border-color: #0f172a;
+    color: #ffffff;
   }
 
   .designPreviewMap {
