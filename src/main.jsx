@@ -992,7 +992,6 @@ function CablePaths({ paths = [] }) {
         positions={path.coordinates || []}
         pathOptions={{ color: path.style_data?.line?.color || importedAssetMeta(path).color, opacity: (path.style_data?.line?.opacity ?? 1) * 0.95, weight: Math.max(2, Math.min(Number(path.style_data?.line?.width) || 4, 8)) }}
       >
-        <KmlMapLabel text={label} style={path.style_data?.label} />
         <Popup>
           <div className="mapPointPopup" dir="rtl">
             <strong>{path.path_name || label || 'Cable route'}</strong>
@@ -1039,6 +1038,7 @@ function ImportedDesignAssets({ assets = [] }) {
   return assets.slice(0, MAX_IMPORTED_ASSETS_TO_RENDER).map((asset) => {
     const meta = importedAssetMeta(asset);
     const label = importedFeatureLabel(asset.asset_name, asset.style_key, asset.properties);
+    const showPointLabel = !['Poles', 'New poles'].includes(meta.label);
     const popupTitle = label || asset.asset_name || meta.label;
     const popup = (
       <Popup>
@@ -1051,7 +1051,7 @@ function ImportedDesignAssets({ assets = [] }) {
       </Popup>
     );
     if (asset.asset_type === 'line') {
-      return <Polyline key={asset.id} positions={asset.coordinates || []} pathOptions={{ color: asset.style_data?.line?.color || meta.color, opacity: asset.style_data?.line?.opacity ?? 0.72, weight: Math.max(1, Math.min(Number(asset.style_data?.line?.width) || 2, 8)) }}><KmlMapLabel text={label} style={asset.style_data?.label} />{popup}</Polyline>;
+      return <Polyline key={asset.id} positions={asset.coordinates || []} pathOptions={{ color: asset.style_data?.line?.color || meta.color, opacity: asset.style_data?.line?.opacity ?? 0.72, weight: Math.max(1, Math.min(Number(asset.style_data?.line?.width) || 2, 8)) }}>{popup}</Polyline>;
     }
     if (asset.asset_type === 'polygon') {
       return <Polygon key={asset.id} positions={asset.coordinates || []} pathOptions={{ color: meta.color, fillColor: meta.fillColor, fillOpacity: meta.fill ? meta.opacity : 0, opacity: meta.outline ? meta.opacity : 0, weight: 1 }}><KmlMapLabel text={label} style={asset.style_data?.label} />{popup}</Polygon>;
@@ -1065,7 +1065,7 @@ function ImportedDesignAssets({ assets = [] }) {
         iconAnchor: [size / 2, size / 2],
         popupAnchor: [0, -size / 2],
       });
-      return <Marker key={asset.id} position={asset.coordinates || []} icon={icon} opacity={meta.opacity}>{popup}</Marker>;
+      return <Marker key={asset.id} position={asset.coordinates || []} icon={icon} opacity={meta.opacity}>{showPointLabel && <KmlMapLabel text={label} style={asset.style_data?.label} />}{popup}</Marker>;
     }
     return (
       <CircleMarker
@@ -1075,6 +1075,7 @@ function ImportedDesignAssets({ assets = [] }) {
         renderer={canvasRenderer}
         pathOptions={{ color: '#ffffff', fillColor: meta.fillColor, fillOpacity: meta.opacity * 0.86, opacity: 0.9, weight: 1.5 }}
       >
+        {showPointLabel && <KmlMapLabel text={label} style={asset.style_data?.label} />}
         {popup}
       </CircleMarker>
     );
