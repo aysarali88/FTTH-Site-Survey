@@ -967,8 +967,8 @@ function MapLayers() {
 
 function KmlMapLabel({ text, style = {} }) {
   const scale = Number(style.scale);
-  if (!text || (Number.isFinite(scale) && scale <= 0)) return null;
-  const fontSize = Math.max(8, Math.min(11, 9 * (Number.isFinite(scale) ? scale : 1)));
+  if (!text) return null;
+  const fontSize = Math.max(8, Math.min(11, 9 * (Number.isFinite(scale) && scale > 0 ? scale : 1)));
   return (
     <Tooltip permanent direction="center" className="kmzMapLabel" opacity={1}>
       <span style={{ color: style.color || '#16a34a', opacity: style.opacity ?? 1, fontSize: `${fontSize}px` }}>{text}</span>
@@ -976,23 +976,33 @@ function KmlMapLabel({ text, style = {} }) {
   );
 }
 
+function importedFeatureLabel(name, styleKey, properties = {}) {
+  const normalizedStyle = kmlStyleLabel(styleKey).replace(/\s+/g, ' ').trim().toLowerCase();
+  const normalizedName = String(name || '').replace(/\s+/g, ' ').trim();
+  if (normalizedName && normalizedName.toLowerCase() !== normalizedStyle) return normalizedName;
+  return properties.ID || properties.Id || properties.id || properties.Name || properties.name || '';
+}
+
 function CablePaths({ paths = [] }) {
-  return paths.map((path) => (
-    <Polyline
-      key={path.id}
-      positions={path.coordinates || []}
-      pathOptions={{ color: path.style_data?.line?.color || importedAssetMeta(path).color, opacity: (path.style_data?.line?.opacity ?? 1) * 0.95, weight: Math.max(2, Math.min(Number(path.style_data?.line?.width) || 4, 8)) }}
-    >
-      <KmlMapLabel text={path.path_name || 'Cable route'} style={path.style_data?.label} />
-      <Popup>
-        <div className="mapPointPopup" dir="rtl">
-          <strong>{path.path_name || 'Cable route'}</strong>
-          <span>مسار كابل</span>
-          {Object.entries(path.properties || {}).slice(0, 8).map(([key, value]) => <span key={key}><b>{key}:</b> {value}</span>)}
-        </div>
-      </Popup>
-    </Polyline>
-  ));
+  return paths.map((path) => {
+    const label = importedFeatureLabel(path.path_name, path.style_key, path.properties);
+    return (
+      <Polyline
+        key={path.id}
+        positions={path.coordinates || []}
+        pathOptions={{ color: path.style_data?.line?.color || importedAssetMeta(path).color, opacity: (path.style_data?.line?.opacity ?? 1) * 0.95, weight: Math.max(2, Math.min(Number(path.style_data?.line?.width) || 4, 8)) }}
+      >
+        <KmlMapLabel text={label} style={path.style_data?.label} />
+        <Popup>
+          <div className="mapPointPopup" dir="rtl">
+            <strong>{path.path_name || label || 'Cable route'}</strong>
+            <span>مسار كابل</span>
+            {Object.entries(path.properties || {}).slice(0, 8).map(([key, value]) => <span key={key}><b>{key}:</b> {value}</span>)}
+          </div>
+        </Popup>
+      </Polyline>
+    );
+  });
 }
 
 function importedAssetMeta(asset = {}) {
@@ -1028,11 +1038,12 @@ function flattenMapCoordinates(value) {
 function ImportedDesignAssets({ assets = [] }) {
   return assets.slice(0, MAX_IMPORTED_ASSETS_TO_RENDER).map((asset) => {
     const meta = importedAssetMeta(asset);
-    const label = asset.asset_name || asset.properties?.ID || asset.properties?.Id || asset.properties?.id || meta.label;
+    const label = importedFeatureLabel(asset.asset_name, asset.style_key, asset.properties);
+    const popupTitle = label || asset.asset_name || meta.label;
     const popup = (
       <Popup>
         <div className="mapPointPopup" dir="rtl">
-          <strong>{label}</strong>
+          <strong>{popupTitle}</strong>
           <span>{meta.label}</span>
           {asset.style_key && <span>{asset.style_key}</span>}
           {Object.entries(asset.properties || {}).slice(0, 12).map(([key, value]) => <span key={key}><b>{key}:</b> {value}</span>)}
@@ -1494,6 +1505,7 @@ function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMa
             },
           }}
         >
+          <KmlMapLabel text={row.point_name || row.id} style={{ color: statusColor, scale: 1 }} />
           {!moveMode && <Popup>
               <div className="mapPointPopup" dir="rtl">
                 <strong>{row.point_name || row.id}</strong>
@@ -1632,7 +1644,7 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
   );
 }
 
-function LegacyTechnicianWorkspace({ assignments, records, plannedRoutes = [], plannedAssets = [], onAdd, onSwitchMode, busy }) {
+function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, busy }) {
   const activeAssignments = (assignments || []).filter((assignment) => assignment.active !== false);
   const [selectedAreaId, setSelectedAreaId] = useState(activeAssignments[0]?.id || '');
   const [location, setLocation] = useState(defaultLocation);
@@ -1713,10 +1725,8 @@ function LegacyTechnicianWorkspace({ assignments, records, plannedRoutes = [], p
           <MapLayers />
           <CurrentLocationControl onLocated={(next) => { setLocation(next); setMessage('تم تحديد موقعك الحالي.'); }} />
           <MapCenterSync value={location} onChange={setLocation} />
-          <MapFitToContent rows={mapRows} paths={plannedRoutes} assets={plannedAssets} />
+          <MapFitToContent rows={mapRows} />
           <MapResizeSync expanded={false} />
-          <ImportedDesignAssets assets={plannedAssets} />
-          <CablePaths paths={plannedRoutes} />
           <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} />
         </MapContainer>
         <div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div>
@@ -1752,8 +1762,10 @@ function LegacyTechnicianWorkspace({ assignments, records, plannedRoutes = [], p
 }
 
 function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], plannedAssets = [], legacyAssignments = [], legacyRecords = [], onRefresh, onLogout, onPlant, onLegacyAdd, busy }) {
+  const isTechnician = profile.role === 'tech';
   const available = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status) && (profile.role === 'supervisor' || row.assigned_to === profile.username || row.assigned_to === profile.techName));
-  const [selectedId, setSelectedId] = useState(available[0]?.id || '');
+  const pointsForPlanting = isTechnician ? available.filter((row) => row.validation_status === 'validated') : available;
+  const [selectedId, setSelectedId] = useState(pointsForPlanting[0]?.id || '');
   const [hasObjection, setHasObjection] = useState('لا');
   const [isExisting, setIsExisting] = useState('لا');
   const [notes, setNotes] = useState('');
@@ -1761,12 +1773,11 @@ function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], planned
   const [message, setMessage] = useState('');
   const [controlsOpen, setControlsOpen] = useState(false);
   const [workflowMode, setWorkflowMode] = useState('validated');
-  const isTechnician = profile.role === 'tech';
-  const selected = available.find((row) => row.id === selectedId) || null;
+  const selected = pointsForPlanting.find((row) => row.id === selectedId) || null;
 
   useEffect(() => {
-    if (!selected && available[0]) setSelectedId(available[0].id);
-  }, [available, selected]);
+    if (!selected) setSelectedId(pointsForPlanting[0]?.id || '');
+  }, [pointsForPlanting, selected]);
 
   function switchWorkflowMode(mode) {
     setWorkflowMode(mode);
@@ -1796,13 +1807,13 @@ function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], planned
       {workflowMode === 'validated' && <button className="engineerPanelToggle" type="button" onClick={() => setControlsOpen((value) => !value)} aria-expanded={controlsOpen} aria-controls="supervisor-controls" aria-label={controlsOpen ? 'إخفاء لوحة الفني' : 'إظهار لوحة الفني'}>
         <Menu size={24} />
       </button>}
-      {isTechnician && workflowMode === 'legacy' ? <LegacyTechnicianWorkspace assignments={legacyAssignments} records={legacyRecords} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} onAdd={onLegacyAdd} onSwitchMode={() => setWorkflowMode('validated')} busy={busy} /> : <>
+      {isTechnician && workflowMode === 'legacy' ? <LegacyTechnicianWorkspace assignments={legacyAssignments} records={legacyRecords} onAdd={onLegacyAdd} onSwitchMode={() => setWorkflowMode('validated')} busy={busy} /> : <>
       <section className="workspace">
-      <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} paths={plannedRoutes} assets={plannedAssets} selectedId={selectedId} onSelect={setSelectedId} onMapClick={() => {}} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
+      <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={pointsForPlanting} paths={isTechnician ? [] : plannedRoutes} assets={isTechnician ? [] : plannedAssets} selectedId={selectedId} onSelect={setSelectedId} onMapClick={() => {}} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
       <section id="supervisor-controls" className={`records panel supervisorControls ${controlsOpen ? 'open' : ''}`} style={{ padding: 20 }}>
         {isTechnician && <div className="mobileWorkflowTabs"><button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => switchWorkflowMode('validated')}>Assigned validated points</button><button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => switchWorkflowMode('legacy')}>Legacy areas</button></div>}
         <div className="recordsHeader"><div><h2>Validated planting points</h2><span>Only engineer-approved points are shown.</span></div></div>
-        <label style={{ marginTop: 14 }}>Point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{available.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} - {row.validation_status}</option>)}</select></label>
+        <label style={{ marginTop: 14 }}>Point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{pointsForPlanting.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} - {row.validation_status}</option>)}</select></label>
         {selected && <>
           <div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div>
           <div className="fieldGrid"><label>هل عليه اعتراض<select value={hasObjection} onChange={(event) => setHasObjection(event.target.value)}><option>لا</option><option>نعم</option></select></label><label>هل هو موجود<select value={isExisting} onChange={(event) => setIsExisting(event.target.value)}><option>لا</option><option>نعم</option></select></label></div>
@@ -1810,10 +1821,10 @@ function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], planned
           <label className="photoBox" style={{ marginTop: 14 }}><Camera size={22} /><span>{photoFile ? photoFile.name : 'التقاط صورة للعمود'}</span><input type="file" accept="image/*" capture="environment" onChange={(event) => setPhotoFile(event.target.files?.[0] || null)} /></label>
           <button className="save" type="button" onClick={submit} disabled={busy || selected.validation_status === 'planted'}>{selected.validation_status === 'planted' ? 'تمت الزراعة' : (busy ? 'جارٍ الحفظ...' : 'تسجيل الزراعة')}</button>
         </>}
-        {!available.length && <div className="empty" style={{ marginTop: 20 }}>لا توجد نقاط معتمدة من المهندس حتى الآن.</div>}
+        {!pointsForPlanting.length && <div className="empty" style={{ marginTop: 20 }}>{isTechnician ? 'لا توجد أعمدة معتمدة بانتظار الزراعة.' : 'لا توجد نقاط معتمدة من المهندس حتى الآن.'}</div>}
       </section>
       </section>
-      <section className="records" style={{ marginTop: 16 }}><div className="recordsHeader"><h2>Point list</h2><span>{available.length} points</span></div><div className="tableWrap"><table><thead><tr><th>ID</th><th>City</th><th>District</th><th>Status</th></tr></thead><tbody>{available.slice(0, 500).map((row) => <tr key={row.id} onClick={() => setSelectedId(row.id)}><td>{row.id}</td><td>{row.city || '-'}</td><td>{row.district || '-'}</td><td>{row.validation_status}</td></tr>)}</tbody></table></div></section>
+      <section className="records" style={{ marginTop: 16 }}><div className="recordsHeader"><h2>Point list</h2><span>{pointsForPlanting.length} points</span></div><div className="tableWrap"><table><thead><tr><th>ID</th><th>City</th><th>District</th><th>Status</th></tr></thead><tbody>{pointsForPlanting.slice(0, 500).map((row) => <tr key={row.id} onClick={() => setSelectedId(row.id)}><td>{row.id}</td><td>{row.city || '-'}</td><td>{row.district || '-'}</td><td>{row.validation_status}</td></tr>)}</tbody></table></div></section>
       </>}
     </main>
   );
@@ -2215,18 +2226,24 @@ function App() {
         .order('created_at', { ascending: false })
         .limit(5000);
       if (plannedError && plannedError.code !== '42P01') throw plannedError;
-      const { data: routes, error: routesError } = await supabase
-        .from('planned_routes')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(2000);
-      if (routesError && routesError.code !== '42P01') throw routesError;
-      const { data: assets, error: assetsError } = await supabase
-        .from('planned_assets')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5000);
-      if (assetsError && assetsError.code !== '42P01') throw assetsError;
+      let routes = [];
+      let assets = [];
+      if (profile?.role !== 'tech') {
+        const { data: routeRows, error: routesError } = await supabase
+          .from('planned_routes')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(2000);
+        if (routesError && routesError.code !== '42P01') throw routesError;
+        routes = routeRows || [];
+        const { data: assetRows, error: assetsError } = await supabase
+          .from('planned_assets')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(5000);
+        if (assetsError && assetsError.code !== '42P01') throw assetsError;
+        assets = assetRows || [];
+      }
       if (['admin', 'design', 'engineer', 'tech'].includes(profile?.role)) {
         const { data: assignments, error: assignmentsError } = await supabase
           .from('legacy_area_assignments')
