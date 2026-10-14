@@ -1065,7 +1065,7 @@ function ImportedDesignAssets({ assets = [] }) {
         iconAnchor: [size / 2, size / 2],
         popupAnchor: [0, -size / 2],
       });
-      return <Marker key={asset.id} position={asset.coordinates || []} icon={icon} opacity={meta.opacity}><KmlMapLabel text={label} style={asset.style_data?.label} />{popup}</Marker>;
+      return <Marker key={asset.id} position={asset.coordinates || []} icon={icon} opacity={meta.opacity}>{popup}</Marker>;
     }
     return (
       <CircleMarker
@@ -1075,7 +1075,6 @@ function ImportedDesignAssets({ assets = [] }) {
         renderer={canvasRenderer}
         pathOptions={{ color: '#ffffff', fillColor: meta.fillColor, fillOpacity: meta.opacity * 0.86, opacity: 0.9, weight: 1.5 }}
       >
-        <KmlMapLabel text={label} style={asset.style_data?.label} />
         {popup}
       </CircleMarker>
     );
@@ -1505,7 +1504,6 @@ function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMa
             },
           }}
         >
-          <KmlMapLabel text={row.point_name || row.id} style={{ color: statusColor, scale: 1 }} />
           {!moveMode && <Popup>
               <div className="mapPointPopup" dir="rtl">
                 <strong>{row.point_name || row.id}</strong>
