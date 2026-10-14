@@ -49,7 +49,7 @@ Deno.serve(async (request) => {
       const user = body?.user || {};
       const username = String(user.username || '').trim().toLowerCase();
       const password = String(user.password || '');
-      const allowedRoles = ['admin', 'tech', 'design', 'engineer', 'supervisor'];
+      const allowedRoles = ['admin', 'tech', 'design', 'engineer', 'supervisor', 'management'];
       if (!/^[a-z0-9._-]{3,40}$/.test(username)) return response({ error: 'Username must use 3-40 English letters, numbers, dot, dash, or underscore.' }, 400);
       if (password.length < 6) return response({ error: 'Password must contain at least 6 characters.' }, 400);
       if (!allowedRoles.includes(user.role)) return response({ error: 'Invalid role.' }, 400);

@@ -251,6 +251,7 @@ function roleLabel(role) {
     design: 'Design',
     engineer: 'Engineer',
     supervisor: 'Supervisor',
+    management: 'Management',
   }[role] || role;
 }
 
@@ -945,7 +946,7 @@ function FastSurveyMarkers({ groupedRecords, onDelete, canDelete }) {
   );
 }
 
-function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
+function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = false }) {
   const [filters, setFilters] = useState({ city: '', district: '', tech: '', status: 'all', fromDate: '', toDate: '' });
 
   const sourceRows = useMemo(
@@ -1053,7 +1054,7 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete }) {
               <MapLayers />
               <CurrentLocationControl />
               <MapResizeSync expanded={false} />
-              <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} onDelete={onDelete} canDelete />
+          <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} onDelete={onDelete} canDelete={!readOnly} />
             </MapContainer>
           </div>
         </article>
@@ -1658,7 +1659,7 @@ function UserManagement({ users, loading, error, onRefresh, onCreate, onToggle, 
           <label>Display name<input value={form.displayName} onChange={(event) => setForm((prev) => ({ ...prev, displayName: event.target.value }))} placeholder="Hamza" /></label>
           <label>Password<input required minLength="6" type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} autoComplete="new-password" /></label>
           <label>Role<select value={form.role} onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value }))}>
-            <option value="tech">Technician</option><option value="design">Designer</option><option value="engineer">Engineer</option><option value="supervisor">Supervisor</option><option value="admin">Admin</option>
+            <option value="tech">Technician</option><option value="design">Designer</option><option value="engineer">Engineer</option><option value="supervisor">Supervisor</option><option value="management">Management</option><option value="admin">Admin</option>
           </select></label>
           <label>City<select value={form.city} onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value, district: '' }))}><option value="">Not assigned</option><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label>
           <label>District<input value={form.district} onChange={(event) => setForm((prev) => ({ ...prev, district: event.target.value }))} placeholder="Optional district" /></label>
@@ -1709,6 +1710,8 @@ function App() {
   const [usersError, setUsersError] = useState('');
 
   const isAdmin = profile?.role === 'admin';
+  const isManagement = profile?.role === 'management';
+  const isAdminView = isAdmin || isManagement;
   const isTechnician = profile?.role === 'tech';
   const isStaffRole = profile?.role === 'design';
   const current = resources[active];
@@ -1720,8 +1723,8 @@ function App() {
       filtered[type] = rows
         .map((row) => normalizeRow(row, type))
         .filter((row) => {
-          if (isStaffRole) return true;
-          if (!isAdmin) return row.tech_name === profile?.techName && row.district === profile?.district;
+          if (isStaffRole && !isManagement) return true;
+          if (!isAdminView) return row.tech_name === profile?.techName && row.district === profile?.district;
           if (adminFilters.type !== 'all' && adminFilters.type !== type) return false;
           if (adminFilters.district && row.district !== adminFilters.district) return false;
           if (adminFilters.techName && row.tech_name !== adminFilters.techName) return false;
@@ -1730,7 +1733,7 @@ function App() {
         });
     }
     return filtered;
-  }, [records, isAdmin, isStaffRole, profile, adminFilters, query]);
+  }, [records, isAdminView, isManagement, isStaffRole, profile, adminFilters, query]);
 
   const currentRows = scopedRecords[active] || [];
   const displayedRows = currentRows.slice(0, MAX_TABLE_ROWS);
@@ -2311,6 +2314,10 @@ function App() {
 
   async function saveRecord(event) {
     event.preventDefault();
+    if (isManagement) {
+      setMessage('حساب Management للقراءة فقط.');
+      return;
+    }
     if (!hasSupabaseConfig) {
       setMessage('لا يمكن الحفظ قبل إضافة إعدادات Supabase.');
       return;
@@ -2366,6 +2373,10 @@ function App() {
   }
 
   async function deleteRecord(type, id) {
+    if (isManagement) {
+      setMessage('حساب Management للقراءة فقط.');
+      return;
+    }
     const confirmed = window.confirm('هل تريد حذف هذه النقطة من السيستم؟');
     if (!confirmed) return;
 
@@ -2548,9 +2559,9 @@ function App() {
   }
 
   return (
-    <main className={`app ${isAdmin ? 'adminMode' : ''} ${isAdmin && adminPage === 'dashboard' ? 'dashboardMode' : ''} ${isAdmin && adminPage === 'data' ? 'dataMode' : ''}`}>
+    <main className={`app ${isAdminView ? 'adminMode' : ''} ${isAdminView && adminPage === 'dashboard' ? 'dashboardMode' : ''} ${isAdminView && adminPage === 'data' ? 'dataMode' : ''}`}>
       <header className="topbar">
-        {isAdmin ? (
+        {isAdminView ? (
           <div className="tbF" aria-label="Admin toolbar">
             <button className="d" type="button" onClick={exportKml} aria-label="KML">
               <Download className="dl" size={16} />
@@ -2572,7 +2583,7 @@ function App() {
             </button>
             <div className="who" title="Current user">
               <span className="av">{(profile.techName || 'A').slice(0, 1).toUpperCase()}</span>
-              <div><b>{profile.techName || 'Admin'}</b><small>ADMIN</small></div>
+              <div><b>{profile.techName || (isManagement ? 'Management' : 'Admin')}</b><small>{isManagement ? 'MANAGEMENT' : 'ADMIN'}</small></div>
             </div>
           </div>
         ) : (
@@ -2594,11 +2605,11 @@ function App() {
         )}
         <div className="topbarHeading">
           <p className="eyebrow">Site Survey Pro</p>
-          <h1>{isAdmin ? 'Dashboard' : 'خريطة الرفع الميداني'}</h1>
+          <h1>{isAdminView ? 'Dashboard' : 'خريطة الرفع الميداني'}</h1>
         </div>
       </header>
 
-      {(!isAdmin || adminPage === 'data') && <section className="stats">
+      {(!isAdminView || adminPage === 'data') && <section className="stats">
         <article>
           <ClipboardList size={19} />
           <span>Buildings</span>
@@ -2616,7 +2627,7 @@ function App() {
         </article>
       </section>}
 
-      {isAdmin && (
+      {isAdminView && (
         <section className="adminPages" aria-label="Admin pages">
           <button type="button" className={adminPage === 'dashboard' ? 'active' : ''} onClick={() => setAdminPage('dashboard')}>
             Dashboard
@@ -2628,14 +2639,14 @@ function App() {
             Photos
             <span>{visiblePhotos.length}</span>
           </button>
-          <button type="button" className={adminPage === 'users' ? 'active' : ''} onClick={() => setAdminPage('users')}>
+          {isAdmin && <button type="button" className={adminPage === 'users' ? 'active' : ''} onClick={() => setAdminPage('users')}>
             Users
-          </button>
+          </button>}
         </section>
       )}
 
-      {isAdmin && adminPage === 'dashboard' && (
-        <PolePlantingDashboard records={records.column_checks} onRefresh={loadAll} busy={busy} onDelete={deleteRecord} />
+      {isAdminView && adminPage === 'dashboard' && (
+        <PolePlantingDashboard records={records.column_checks} onRefresh={loadAll} busy={busy} onDelete={deleteRecord} readOnly={isManagement} />
       )}
 
       {isAdmin && adminPage === 'users' && (
@@ -2652,7 +2663,7 @@ function App() {
         />
       )}
 
-      {isAdmin && adminPage === 'data' && (
+      {isAdminView && adminPage === 'data' && (
         <section className="adminFilters">
           <label>
             District
@@ -2684,7 +2695,7 @@ function App() {
 
       {isAdmin && adminPage === 'data' && <WorkflowQueue plannedRows={plannedRows} technicians={technicianOptions} onAssign={assignPlannedPole} onRefresh={loadAll} busy={busy} />}
 
-      {(!isAdmin || adminPage === 'data') && <nav className="tabs" aria-label="Survey sections">
+      {(!isAdminView || (isAdmin && adminPage === 'data')) && <nav className="tabs" aria-label="Survey sections">
         {(isTechnician ? Object.entries(resources).filter(([key]) => key === 'column_checks') : Object.entries(resources)).map(([key, item]) => (
           <button
             key={key}
@@ -2702,9 +2713,9 @@ function App() {
         ))}
       </nav>}
 
-      {message && (!isAdmin || adminPage === 'data') && <div className="notice">{message}</div>}
+      {message && (!isAdminView || adminPage === 'data') && <div className="notice">{message}</div>}
 
-      {(!isAdmin || adminPage === 'data') && <section className="workspace">
+      {(!isAdminView || adminPage === 'data') && <section className="workspace">
         <div className={`mapShell ${mapExpanded ? 'expandedMap' : ''}`}>
           <button
             className="mapExpandButton"
@@ -2715,10 +2726,10 @@ function App() {
           >
             {mapExpanded ? <Minimize2 size={19} /> : <Expand size={19} />}
           </button>
-          <button className="mapAddButton" type="button" onClick={() => setFormDrawerOpen(true)}>
+          {!isManagement && <button className="mapAddButton" type="button" onClick={() => setFormDrawerOpen(true)}>
             <Plus size={18} />
             إضافة
-          </button>
+          </button>}
           <button className="logoutButton" type="button" onClick={changeProfile} aria-label="تسجيل الخروج">
             <LogOut size={18} />
             خروج
@@ -2739,7 +2750,7 @@ function App() {
             <CurrentLocationControl onLocated={(next) => { setLocation(next); setMessage('تم تحديد موقعك الحالي.'); }} />
             <MapCenterSync value={form} onChange={setLocation} />
             <MapResizeSync expanded={mapExpanded} />
-            <FastSurveyMarkers groupedRecords={mapRecords} onDelete={deleteRecord} canDelete />
+            <FastSurveyMarkers groupedRecords={mapRecords} onDelete={deleteRecord} canDelete={isAdmin} />
           </MapContainer>
           {hiddenMapMarkers > 0 && (
             <div className="limitBadge">
@@ -2754,7 +2765,7 @@ function App() {
           </div>
         </div>
 
-        <form className={`panel ${formDrawerOpen ? 'open' : ''}`} onSubmit={saveRecord}>
+        {!isManagement && <form className={`panel ${formDrawerOpen ? 'open' : ''}`} onSubmit={saveRecord}>
           <div className="drawerTabs" aria-label="Choose record type">
             {Object.entries(resources).map(([key, item]) => (
               <button
@@ -2821,10 +2832,10 @@ function App() {
           <button className="save" type="submit" disabled={busy}>
             {busy ? 'جارٍ الحفظ...' : 'حفظ السجل'}
           </button>
-        </form>
+        </form>}
       </section>}
 
-      {isAdmin && adminPage === 'photos' && (
+      {isAdminView && adminPage === 'photos' && (
         <section className="photosPage">
           <div className="recordsHeader">
             <h2>Photos</h2>
@@ -2851,12 +2862,12 @@ function App() {
         </section>
       )}
 
-      {(!isAdmin || adminPage === 'data') && (
+      {(!isAdminView || adminPage === 'data') && (
       <section className="records">
         <div className="recordsHeader">
-          <h2>{isAdmin ? 'All Records' : 'سجلاتي'}</h2>
+          <h2>{isAdminView ? 'All Records' : 'سجلاتي'}</h2>
           {hiddenTableRows > 0 && <span className="softHint">يظهر أول {MAX_TABLE_ROWS} من {currentRows.length} فقط. استخدم الفلاتر لعرض أدق.</span>}
-          {!isAdmin && (
+          {!isAdminView && (
             <label className="search">
               <Search size={17} />
               <input placeholder="بحث سريع..." value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -2868,7 +2879,7 @@ function App() {
             <thead>
               <tr>
                 {current.columns.map((column) => <th key={column}>{labels[column] || column}</th>)}
-                <th>حذف</th>
+                {isAdmin && <th>حذف</th>}
               </tr>
             </thead>
             <tbody>
@@ -2886,16 +2897,16 @@ function App() {
                         : formatValue(row[column])}
                     </td>
                   ))}
-                  <td>
+                  {isAdmin && <td>
                     <button className="dangerIcon" type="button" onClick={() => deleteRecord(active, row.id)} title="حذف">
                       <Trash2 size={16} />
                     </button>
-                  </td>
+                  </td>}
                 </tr>
               ))}
               {!currentRows.length && (
                 <tr>
-                  <td colSpan={current.columns.length + 1} className="empty">لا توجد سجلات حسب المستخدم والمنطقة الحالية.</td>
+                  <td colSpan={current.columns.length + (isAdmin ? 1 : 0)} className="empty">لا توجد سجلات حسب المستخدم والمنطقة الحالية.</td>
                 </tr>
               )}
             </tbody>

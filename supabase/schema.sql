@@ -4,7 +4,7 @@ create table if not exists public.user_profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   username text unique not null,
   display_name text,
-  role text not null check (role in ('admin', 'tech', 'design', 'engineer', 'supervisor')),
+  role text not null check (role in ('admin', 'tech', 'design', 'engineer', 'supervisor', 'management')),
   city text,
   district text,
   active boolean not null default true,
@@ -42,6 +42,22 @@ create trigger on_auth_user_created_profile after insert on auth.users
 for each row execute function public.handle_new_user_profile();
 
 grant select on public.user_profiles to authenticated;
+
+create or replace function public.is_management_user()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.user_profiles
+    where id = (select auth.uid()) and role = 'management'
+  );
+$$;
+
+revoke all on function public.is_management_user() from public;
+grant execute on function public.is_management_user() to anon, authenticated;
 
 create or replace function public.current_app_role()
 returns text
@@ -96,7 +112,7 @@ alter table public.planned_poles add column if not exists deleted_at timestamptz
 drop policy if exists "authenticated read planned poles" on public.planned_poles;
 create policy "authenticated read planned poles" on public.planned_poles
 for select to authenticated using (
-  public.current_app_role() in ('admin', 'design', 'engineer', 'supervisor')
+  public.current_app_role() in ('admin', 'design', 'engineer', 'supervisor', 'management')
   or (
     public.current_app_role() = 'tech'
     and assigned_to = (select username from public.user_profiles where id = (select auth.uid()))
@@ -136,7 +152,7 @@ alter table public.planned_routes enable row level security;
 drop policy if exists "authenticated read planned routes" on public.planned_routes;
 create policy "authenticated read planned routes" on public.planned_routes
 for select to authenticated using (
-  public.current_app_role() in ('admin', 'design', 'engineer', 'supervisor')
+  public.current_app_role() in ('admin', 'design', 'engineer', 'supervisor', 'management')
   or (
     public.current_app_role() = 'tech'
     and exists (
@@ -396,15 +412,23 @@ for select using (true);
 
 drop policy if exists "public write buildings" on public.buildings;
 create policy "public write buildings" on public.buildings
-for insert with check (true);
+for insert with check (
+  not public.is_management_user()
+);
 
 drop policy if exists "public update buildings" on public.buildings;
 create policy "public update buildings" on public.buildings
-for update using (true) with check (true);
+for update using (
+  not public.is_management_user()
+) with check (
+  not public.is_management_user()
+);
 
 drop policy if exists "public delete buildings" on public.buildings;
 create policy "public delete buildings" on public.buildings
-for delete using (true);
+for delete using (
+  not public.is_management_user()
+);
 
 drop policy if exists "public read poles" on public.poles;
 create policy "public read poles" on public.poles
@@ -412,15 +436,23 @@ for select using (true);
 
 drop policy if exists "public write poles" on public.poles;
 create policy "public write poles" on public.poles
-for insert with check (true);
+for insert with check (
+  not public.is_management_user()
+);
 
 drop policy if exists "public update poles" on public.poles;
 create policy "public update poles" on public.poles
-for update using (true) with check (true);
+for update using (
+  not public.is_management_user()
+) with check (
+  not public.is_management_user()
+);
 
 drop policy if exists "public delete poles" on public.poles;
 create policy "public delete poles" on public.poles
-for delete using (true);
+for delete using (
+  not public.is_management_user()
+);
 
 drop policy if exists "public read column checks" on public.column_checks;
 create policy "public read column checks" on public.column_checks
@@ -428,15 +460,23 @@ for select using (true);
 
 drop policy if exists "public write column checks" on public.column_checks;
 create policy "public write column checks" on public.column_checks
-for insert with check (true);
+for insert with check (
+  not public.is_management_user()
+);
 
 drop policy if exists "public update column checks" on public.column_checks;
 create policy "public update column checks" on public.column_checks
-for update using (true) with check (true);
+for update using (
+  not public.is_management_user()
+) with check (
+  not public.is_management_user()
+);
 
 drop policy if exists "public delete column checks" on public.column_checks;
 create policy "public delete column checks" on public.column_checks
-for delete using (true);
+for delete using (
+  not public.is_management_user()
+);
 
 grant select, insert, update, delete on public.buildings to anon;
 grant select, insert, update, delete on public.poles to anon;
@@ -455,8 +495,17 @@ for select using (bucket_id = 'survey-photos');
 
 drop policy if exists "public upload survey photos" on storage.objects;
 create policy "public upload survey photos" on storage.objects
-for insert with check (bucket_id = 'survey-photos');
+for insert with check (
+  bucket_id = 'survey-photos'
+  and not public.is_management_user()
+);
 
 drop policy if exists "public update survey photos" on storage.objects;
 create policy "public update survey photos" on storage.objects
-for update using (bucket_id = 'survey-photos') with check (bucket_id = 'survey-photos');
+for update using (
+  bucket_id = 'survey-photos'
+  and not public.is_management_user()
+) with check (
+  bucket_id = 'survey-photos'
+  and not public.is_management_user()
+);
