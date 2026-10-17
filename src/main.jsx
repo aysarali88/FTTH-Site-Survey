@@ -22,6 +22,7 @@ import {
   Upload,
   UserCog,
   UserRound,
+  UsersRound,
   X,
 } from 'lucide-react';
 import { CircleMarker, LayersControl, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
@@ -1950,6 +1951,9 @@ function App() {
   const [technicianUsers, setTechnicianUsers] = useState([]);
   const [usersBusy, setUsersBusy] = useState(false);
   const [usersError, setUsersError] = useState('');
+  const [onlineUsers, setOnlineUsers] = useState(null);
+  const [onlineUsersOpen, setOnlineUsersOpen] = useState(false);
+  const onlineUsersRef = useRef(null);
 
   const isAdmin = profile?.role === 'admin';
   const isManagement = profile?.role === 'management';
@@ -2059,6 +2063,75 @@ function App() {
     });
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (!profile || !supabase) {
+      setOnlineUsers(null);
+      return undefined;
+    }
+
+    let mounted = true;
+    setOnlineUsers(null);
+    const channel = supabase
+      .channel('site-survey-online-sessions')
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        const usersByIdentity = new Map();
+        Object.entries(state).forEach(([presenceKey, presences]) => {
+          (Array.isArray(presences) ? presences : []).forEach((presence) => {
+            const identity = String(presence.username || presence.display_name || presenceKey).trim().toLowerCase();
+            const user = {
+              identity,
+              name: presence.display_name || presence.username || 'Connected user',
+              role: presence.role || '',
+              onlineAt: presence.online_at || '',
+            };
+            const previous = usersByIdentity.get(identity);
+            if (!previous || user.onlineAt > previous.onlineAt) usersByIdentity.set(identity, user);
+          });
+        });
+        const users = [...usersByIdentity.values()].sort((a, b) => b.onlineAt.localeCompare(a.onlineAt));
+        if (mounted) setOnlineUsers(users);
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          try {
+            const trackStatus = await channel.track({
+              username: profile.username || profile.techName || 'admin',
+              display_name: profile.techName || profile.username || 'Admin',
+              role: profile.role,
+              online_at: new Date().toISOString(),
+            });
+            if (trackStatus === 'error' && mounted) setOnlineUsers(null);
+          } catch {
+            if (mounted) setOnlineUsers(null);
+          }
+        } else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status) && mounted) {
+          setOnlineUsers(null);
+        }
+      });
+
+    return () => {
+      mounted = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [profile]);
+
+  useEffect(() => {
+    if (!onlineUsersOpen) return undefined;
+    const closeOnOutsideClick = (event) => {
+      if (!onlineUsersRef.current?.contains(event.target)) setOnlineUsersOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setOnlineUsersOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [onlineUsersOpen]);
 
   useEffect(() => {
     document.body.classList.toggle('map-fullscreen-active', mapExpanded);
@@ -2882,6 +2955,34 @@ function App() {
           <h1>{isAdminView ? 'Dashboard' : 'خريطة الرفع الميداني'}</h1>
         </div>
       </header>
+
+      {isAdmin && <div className="onlineSessionsWrap" ref={onlineUsersRef}>
+        <button
+          className="onlineSessionsBadge"
+          type="button"
+          aria-expanded={onlineUsersOpen}
+          aria-controls="online-users-list"
+          onClick={() => setOnlineUsersOpen((open) => !open)}
+          title="Show users currently online"
+        >
+          <UsersRound size={18} />
+          <span>Online</span>
+          <strong>{onlineUsers?.length ?? '...'}</strong>
+          <i aria-hidden="true" />
+        </button>
+        {onlineUsersOpen && <div className="onlineUsersPopover" id="online-users-list" role="dialog" aria-label="Users currently online">
+          <div className="onlineUsersHeading">
+            <strong>Online users</strong>
+            <span>Active now</span>
+          </div>
+          {onlineUsers === null ? <p className="onlineUsersEmpty">Connecting...</p> : onlineUsers.length ? onlineUsers.map((user) => (
+            <div className="onlineUserRow" key={user.identity}>
+              <div className="onlineUserStatus"><strong>{user.name}</strong><span>{roleLabel(user.role) || 'User'}</span></div>
+              <i aria-label="Online now" />
+            </div>
+          )) : <p className="onlineUsersEmpty">No users online.</p>}
+        </div>}
+      </div>}
 
       {(!isAdminView || adminPage === 'data') && <section className="stats">
         <article>

@@ -954,6 +954,109 @@ button:disabled {
   padding: 2px 8px;
 }
 
+.onlineSessionsWrap {
+  margin: 0 0 14px auto;
+  position: relative;
+  width: max-content;
+  z-index: 500;
+}
+
+.onlineSessionsBadge {
+  align-items: center;
+  background: #fffefb;
+  border: 1px solid var(--console-line);
+  border-radius: 8px;
+  color: var(--console-ink);
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  padding: 10px 14px;
+  width: max-content;
+}
+
+.onlineSessionsBadge svg {
+  color: #16834b;
+}
+
+.onlineSessionsBadge span {
+  color: var(--console-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.onlineSessionsBadge strong {
+  color: var(--console-ink);
+  font-size: 20px;
+  min-width: 1.5em;
+  text-align: center;
+}
+
+.onlineSessionsBadge i,
+.onlineUserRow > i {
+  background: #28b879;
+  border: 2px solid #e8f7ef;
+  border-radius: 50%;
+  height: 10px;
+  width: 10px;
+}
+
+.onlineUsersPopover {
+  background: #fff;
+  border: 1px solid var(--console-line);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(15, 42, 74, 0.16);
+  max-height: min(360px, 65vh);
+  min-width: 260px;
+  overflow-y: auto;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: max-content;
+  z-index: 1200;
+}
+
+.onlineUsersHeading,
+.onlineUserRow {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  padding: 11px 14px;
+}
+
+.onlineUsersHeading {
+  border-bottom: 1px solid #edf1f5;
+  color: var(--console-muted);
+  font-size: 12px;
+}
+
+.onlineUsersHeading span,
+.onlineUserStatus span {
+  color: var(--console-muted);
+  font-size: 11px;
+}
+
+.onlineUserRow + .onlineUserRow {
+  border-top: 1px solid #f1f4f7;
+}
+
+.onlineUserStatus {
+  display: grid;
+  gap: 3px;
+}
+
+.onlineUserStatus strong {
+  color: var(--console-ink);
+  font-size: 13px;
+}
+
+.onlineUsersEmpty {
+  color: var(--console-muted);
+  font-size: 13px;
+  margin: 0;
+  padding: 16px;
+  text-align: center;
+}
+
 .userManagement {
   background: #ffffff;
   border: 1px solid #e2e8f0;
