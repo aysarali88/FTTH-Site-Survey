@@ -40,6 +40,7 @@ const PROFILE_KEY = 'site-survey-profile';
 const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || '1234';
 const AUTH_EMAIL_DOMAIN = 'site-survey.local';
 const IMPORT_BATCH_SIZE = 500;
+const DATA_PAGE_SIZE = 1000;
 const MAX_IMPORTED_RECORDS_TO_RENDER = 500;
 const MAX_MAP_MARKERS = 2000;
 const MAX_IMPORTED_ASSETS_TO_RENDER = 3500;
@@ -454,6 +455,20 @@ function countBy(rows, key) {
     counts.set(value, (counts.get(value) || 0) + 1);
     return counts;
   }, new Map())].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+async function fetchAllRows(buildQuery) {
+  const rows = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await buildQuery().range(offset, offset + DATA_PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = data || [];
+    if (!page.length) break;
+    rows.push(...page);
+    offset += page.length;
+  }
+  return rows.reverse();
 }
 
 function escapeXml(value) {
@@ -2287,34 +2302,44 @@ function App() {
     try {
       const nextRecords = {};
       for (const [key, config] of Object.entries(resources)) {
-        const { data, error } = await supabase.from(config.table).select('*').order('created_at', { ascending: false }).limit(2000);
-        if (error) throw error;
-        nextRecords[key] = data || [];
+        nextRecords[key] = await fetchAllRows(() => supabase
+          .from(config.table)
+          .select('*')
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true }));
       }
-      const { data: planned, error: plannedError } = await supabase
-        .from('planned_poles')
-        .select('*')
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-        .limit(5000);
-      if (plannedError && plannedError.code !== '42P01') throw plannedError;
+      let planned = [];
+      try {
+        planned = await fetchAllRows(() => supabase
+          .from('planned_poles')
+          .select('*')
+          .is('deleted_at', null)
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true }));
+      } catch (error) {
+        if (error.code !== '42P01') throw error;
+      }
       let routes = [];
       let assets = [];
       if (profile?.role !== 'tech') {
-        const { data: routeRows, error: routesError } = await supabase
-          .from('planned_routes')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(2000);
-        if (routesError && routesError.code !== '42P01') throw routesError;
-        routes = routeRows || [];
-        const { data: assetRows, error: assetsError } = await supabase
-          .from('planned_assets')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(5000);
-        if (assetsError && assetsError.code !== '42P01') throw assetsError;
-        assets = assetRows || [];
+        try {
+          routes = await fetchAllRows(() => supabase
+            .from('planned_routes')
+            .select('*')
+            .order('created_at', { ascending: true })
+            .order('id', { ascending: true }));
+        } catch (error) {
+          if (error.code !== '42P01') throw error;
+        }
+        try {
+          assets = await fetchAllRows(() => supabase
+            .from('planned_assets')
+            .select('*')
+            .order('created_at', { ascending: true })
+            .order('id', { ascending: true }));
+        } catch (error) {
+          if (error.code !== '42P01') throw error;
+        }
       }
       if (['admin', 'design', 'engineer', 'tech'].includes(profile?.role)) {
         const { data: assignments, error: assignmentsError } = await supabase
