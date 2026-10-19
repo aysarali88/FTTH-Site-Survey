@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import {
   Camera,
   BarChart3,
+  Activity,
   CheckCircle2,
   ClipboardList,
   Download,
@@ -1345,6 +1346,168 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = 
   );
 }
 
+function ManagementWorkspace({ plannedRows, plannedRoutes, plannedAssets, plantingRows, activityRows, activityAvailable, onRefresh, busy }) {
+  const [activityFilter, setActivityFilter] = useState('all');
+  const [search, setSearch] = useState('');
+
+  const summary = useMemo(() => {
+    const active = plannedRows.filter((row) => !row.deleted_at);
+    return {
+      uploaded: new Set([...plannedRows, ...plannedRoutes, ...plannedAssets].map((row) => row.batch_id).filter(Boolean)).size,
+      pending: active.filter((row) => row.validation_status === 'pending').length,
+      validated: active.filter((row) => row.validation_status === 'validated').length,
+      assigned: active.filter((row) => row.validation_status === 'validated' && row.assigned_to).length,
+      planted: plantingRows.filter((row) => yesNoToBoolean(row.is_planted)).length,
+      fieldRecords: plantingRows.length,
+    };
+  }, [plannedRows, plannedRoutes, plannedAssets, plantingRows]);
+
+  const batches = useMemo(() => {
+    const activityByBatch = new Map(activityRows
+      .filter((item) => item.action === 'design_batch_uploaded' && item.batch_id)
+      .map((item) => [item.batch_id, item]));
+    const grouped = new Map();
+    [...plannedRows, ...plannedRoutes, ...plannedAssets].forEach((row) => {
+      if (!row.batch_id) return;
+      const batch = grouped.get(row.batch_id) || {
+        id: row.batch_id,
+        city: row.city || '-',
+        district: row.district || '-',
+        poles: 0,
+        routes: 0,
+        features: 0,
+        uploadedAt: row.created_at || '',
+        uploadedBy: row.created_by || '',
+      };
+      if (row.asset_type) batch.features += 1;
+      else if (row.latitude !== undefined) batch.poles += 1;
+      else batch.routes += 1;
+      if (row.created_at && (!batch.uploadedAt || row.created_at < batch.uploadedAt)) batch.uploadedAt = row.created_at;
+      if (!batch.uploadedBy && row.created_by) batch.uploadedBy = row.created_by;
+      grouped.set(row.batch_id, batch);
+    });
+    return [...grouped.values()]
+      .map((batch) => {
+        const upload = activityByBatch.get(batch.id);
+        return {
+          ...batch,
+          uploadedAt: upload?.occurred_at || batch.uploadedAt,
+          uploadedBy: upload?.actor_name || upload?.actor_username || batch.uploadedBy,
+        };
+      })
+      .sort((a, b) => String(b.uploadedAt).localeCompare(String(a.uploadedAt)));
+  }, [plannedRows, plannedRoutes, plannedAssets, activityRows]);
+
+  const filteredActivity = useMemo(() => activityRows.filter((item) => {
+    if (activityFilter !== 'all' && item.action !== activityFilter) return false;
+    if (search && !JSON.stringify(item).toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  }), [activityRows, activityFilter, search]);
+
+  const recentPlanned = useMemo(() => [...plannedRows]
+    .sort((a, b) => String(b.updated_at || b.created_at).localeCompare(String(a.updated_at || a.created_at)))
+    .slice(0, 30), [plannedRows]);
+  const recentPlantings = useMemo(() => [...plantingRows]
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+    .slice(0, 30), [plantingRows]);
+
+  return (
+    <section className="managementOps">
+      <div className="managementOpsHeading">
+        <div><span>MANAGEMENT · READ ONLY</span><h2>Operations overview</h2><p>Designer uploads, engineer validation and assignments, and technician field work.</p></div>
+        <button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={17} /> Refresh</button>
+      </div>
+
+      {activityAvailable === false && <div className="notice managementActivityNotice">Activity history will appear after the database migration is published. Current uploaded areas, workflow status, and planting records are shown below.</div>}
+
+      <div className="managementOpsStats">
+        <article><Upload size={19} /><span>Active design batches</span><strong>{summary.uploaded}</strong></article>
+        <article><Activity size={19} /><span>Pending engineer review</span><strong>{summary.pending}</strong></article>
+        <article><CheckCircle2 size={19} /><span>Validated and assigned</span><strong>{summary.assigned} / {summary.validated}</strong></article>
+        <article><MapPin size={19} /><span>Technician planted</span><strong>{summary.planted} / {summary.fieldRecords}</strong></article>
+      </div>
+
+      <div className="managementOpsGrid">
+        <article className="dashboardPanel">
+          <div className="dashboardPanelHead"><div><h3>Designer uploads</h3><span>{batches.length} active imported areas</span></div><Upload size={19} /></div>
+          <div className="dashboardRecentWrap"><table className="dashboardRecentTable managementTable"><thead><tr><th>Area / batch</th><th>Uploaded by</th><th>Time</th><th>Poles</th><th>Routes</th><th>Features</th></tr></thead><tbody>
+            {batches.slice(0, 15).map((batch) => <tr key={batch.id}><td><strong>{batch.city} · {batch.district}</strong><small>{batch.id}</small></td><td>{batch.uploadedBy || '-'}</td><td>{formatDate(batch.uploadedAt)} {formatTime(batch.uploadedAt)}</td><td>{batch.poles}</td><td>{batch.routes}</td><td>{batch.features}</td></tr>)}
+            {!batches.length && <tr><td colSpan="6" className="dashboardEmptyCell">No uploaded areas found.</td></tr>}
+          </tbody></table></div>
+        </article>
+
+        <article className="dashboardPanel">
+          <div className="dashboardPanelHead"><div><h3>Engineer workflow</h3><span>Latest 30 of {plannedRows.length} points · current status and technician assignment</span></div><ClipboardList size={19} /></div>
+          <div className="dashboardRecentWrap"><table className="dashboardRecentTable managementTable"><thead><tr><th>Point</th><th>Area</th><th>Status</th><th>Validated by</th><th>Assigned to</th><th>Updated</th></tr></thead><tbody>
+            {recentPlanned.map((row) => <tr key={row.id}><td className="idCell">{row.point_name || row.id}</td><td>{row.city || '-'} · {row.district || '-'}</td><td><span className={`statusPill ${row.validation_status === 'validated' || row.validation_status === 'planted' ? 'statusGood' : row.validation_status === 'rejected' ? 'statusBad' : 'statusWarn'}`}>{row.validation_status || 'pending'}</span></td><td>{row.validated_by || '-'}</td><td>{row.assigned_to || '-'}</td><td>{formatDate(row.updated_at || row.created_at)} {formatTime(row.updated_at || row.created_at)}</td></tr>)}
+            {!recentPlanned.length && <tr><td colSpan="6" className="dashboardEmptyCell">No planned points found.</td></tr>}
+          </tbody></table></div>
+        </article>
+      </div>
+
+      <article className="dashboardPanel managementActivityPanel">
+        <div className="dashboardPanelHead"><div><h3>Uploaded design map</h3><span>Read-only preview · {Math.min(plannedRows.length, MAX_MAP_MARKERS)} poles, {Math.min(plannedRoutes.length, MAX_MAP_MARKERS)} routes, {Math.min(plannedAssets.length, MAX_IMPORTED_ASSETS_TO_RENDER)} features</span></div><MapPinned size={19} /></div>
+        <div className="managementDesignMap"><EngineerMap rows={plannedRows.slice(0, MAX_MAP_MARKERS)} paths={plannedRoutes.slice(0, MAX_MAP_MARKERS)} assets={plannedAssets.slice(0, MAX_IMPORTED_ASSETS_TO_RENDER)} selectedId="" onSelect={() => {}} onMapClick={() => {}} /></div>
+      </article>
+
+      <article className="dashboardPanel managementActivityPanel">
+        <div className="dashboardPanelHead"><div><h3>Activity history</h3><span>Who did what, where, and when</span></div><span className="dashboardResultCount">{filteredActivity.length} events</span></div>
+        <div className="managementActivityFilters">
+          <label>Action<select value={activityFilter} onChange={(event) => setActivityFilter(event.target.value)}>
+            <option value="all">All actions</option>
+            <option value="design_batch_uploaded">Designer uploads</option>
+            <option value="design_batch_deleted">Deleted design batches</option>
+            <option value="point_validated">Engineer approvals</option>
+            <option value="point_rejected">Engineer rejections</option>
+            <option value="point_assigned">Technician assignments</option>
+            <option value="point_unassigned">Removed assignments</option>
+            <option value="engineer_point_added">Engineer added points</option>
+            <option value="engineer_point_deleted">Engineer removed points</option>
+            <option value="point_location_updated">Point location edits</option>
+            <option value="technician_planting_record">Technician plantings</option>
+            <option value="technician_field_record">Technician field records</option>
+            <option value="technician_record_updated">Technician record edits</option>
+            <option value="technician_record_deleted">Technician record deletions</option>
+          </select></label>
+          <label>Search<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, area, point, or batch" /></label>
+        </div>
+        <div className="dashboardRecentWrap"><table className="dashboardRecentTable managementTable"><thead><tr><th>When</th><th>Action</th><th>By</th><th>Role</th><th>Area</th><th>Point / batch</th><th>Details</th></tr></thead><tbody>
+          {filteredActivity.slice(0, 200).map((item) => <tr key={item.id}><td>{formatDate(item.occurred_at)} {formatTime(item.occurred_at)}{item.source === 'baseline' && <small>Historical snapshot</small>}</td><td>{managementActionLabel(item.action)}</td><td>{item.actor_name || item.actor_username || 'Unknown user'}</td><td>{item.actor_role || '-'}</td><td>{item.city || '-'} · {item.district || '-'}</td><td className="idCell">{item.entity_id || item.batch_id || '-'}</td><td>{item.target_username ? `Assigned to ${item.target_username}` : item.summary}</td></tr>)}
+          {!filteredActivity.length && <tr><td colSpan="7" className="dashboardEmptyCell">{activityAvailable === false ? 'Activity history is not installed yet.' : 'No activity matches the selected filters.'}</td></tr>}
+        </tbody></table></div>
+        {filteredActivity.length > 200 && <p className="managementTableHint">Showing the latest 200 matching events. Use search and action filters to narrow the list.</p>}
+      </article>
+
+      <article className="dashboardPanel managementActivityPanel">
+        <div className="dashboardPanelHead"><div><h3>Technician field work</h3><span>Latest 30 of {plantingRows.length} planting and field records</span></div><UsersRound size={19} /></div>
+        <div className="dashboardRecentWrap"><table className="dashboardRecentTable managementTable"><thead><tr><th>When</th><th>Technician</th><th>Area</th><th>Planted</th><th>Existing</th><th>Objection</th><th>Record</th></tr></thead><tbody>
+          {recentPlantings.map((row) => <tr key={row.id}><td>{formatDate(row.created_at)} {formatTime(row.created_at)}</td><td>{row.tech_name || '-'}</td><td>{row.city || '-'} · {row.district || '-'}</td><td><span className={`statusPill ${yesNoToBoolean(row.is_planted) ? 'statusGood' : 'statusWarn'}`}>{yesNoToBoolean(row.is_planted) ? 'Yes' : 'No'}</span></td><td>{yesNoToBoolean(row.is_existing) ? 'Yes' : 'No'}</td><td>{yesNoToBoolean(row.has_objection) ? 'Yes' : 'No'}</td><td className="idCell">{row.id}</td></tr>)}
+          {!recentPlantings.length && <tr><td colSpan="7" className="dashboardEmptyCell">No technician records found.</td></tr>}
+        </tbody></table></div>
+      </article>
+    </section>
+  );
+}
+
+function managementActionLabel(action) {
+  const labelsByAction = {
+    design_batch_uploaded: 'Designer uploaded an area',
+    design_batch_deleted: 'Designer deleted an area',
+    engineer_point_added: 'Engineer added a point',
+    point_validated: 'Engineer validated a point',
+    point_rejected: 'Engineer rejected a point',
+    point_assigned: 'Engineer assigned a technician',
+    point_unassigned: 'Engineer removed an assignment',
+    point_location_updated: 'Engineer moved a point',
+    engineer_point_deleted: 'Engineer removed a point',
+    technician_planting_record: 'Technician recorded a planting',
+    technician_field_record: 'Technician recorded a field check',
+    technician_record_updated: 'Field record updated',
+    technician_record_deleted: 'Field record deleted',
+  };
+  return labelsByAction[action] || action || 'Activity';
+}
+
 function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = [], plantingRows, onUpload, onDeleteBatch, onRefresh, onLogout, busy }) {
   const [city, setCity] = useState(profile.city || 'Misrata');
   const [district, setDistrict] = useState(profile.district || '');
@@ -1961,7 +2124,9 @@ function App() {
   const [formDrawerOpen, setFormDrawerOpen] = useState(false);
   const [mapExpanded, setMapExpanded] = useState(false);
   const [adminFilters, setAdminFilters] = useState({ district: '', techName: '', type: 'all' });
-  const [adminPage, setAdminPage] = useState('data');
+  const [adminPage, setAdminPage] = useState(() => readSavedProfile()?.role === 'management' ? 'operations' : 'data');
+  const [managementActivity, setManagementActivity] = useState([]);
+  const [activityAvailable, setActivityAvailable] = useState(null);
   const [managedUsers, setManagedUsers] = useState([]);
   const [technicianUsers, setTechnicianUsers] = useState([]);
   const [usersBusy, setUsersBusy] = useState(false);
@@ -1969,6 +2134,8 @@ function App() {
   const [onlineUsers, setOnlineUsers] = useState(null);
   const [onlineUsersOpen, setOnlineUsersOpen] = useState(false);
   const onlineUsersRef = useRef(null);
+  const loadAllRef = useRef(null);
+  const activityRefreshTimerRef = useRef(null);
 
   const isAdmin = profile?.role === 'admin';
   const isManagement = profile?.role === 'management';
@@ -2054,6 +2221,11 @@ function App() {
       requestCurrentLocation(true);
     }
   }, [profile]);
+
+  useEffect(() => {
+    if (profile?.role === 'management') setAdminPage('operations');
+    else if (profile?.role === 'admin') setAdminPage('data');
+  }, [profile?.role]);
 
   useEffect(() => {
     let mounted = true;
@@ -2147,6 +2319,27 @@ function App() {
       document.removeEventListener('keydown', closeOnEscape);
     };
   }, [onlineUsersOpen]);
+
+  useEffect(() => {
+    if (!isManagement || !supabase) return undefined;
+    let mounted = true;
+    const channel = supabase
+      .channel('management-activity-updates')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'management_activity' }, (payload) => {
+        if (!mounted || !payload.new) return;
+        setManagementActivity((current) => [payload.new, ...current.filter((item) => item.id !== payload.new.id)]);
+        if (activityRefreshTimerRef.current) clearTimeout(activityRefreshTimerRef.current);
+        activityRefreshTimerRef.current = setTimeout(() => {
+          if (mounted) loadAllRef.current?.();
+        }, 1200);
+      })
+      .subscribe();
+    return () => {
+      mounted = false;
+      if (activityRefreshTimerRef.current) clearTimeout(activityRefreshTimerRef.current);
+      void supabase.removeChannel(channel);
+    };
+  }, [isManagement]);
 
   useEffect(() => {
     document.body.classList.toggle('map-fullscreen-active', mapExpanded);
@@ -2341,6 +2534,24 @@ function App() {
           if (error.code !== '42P01') throw error;
         }
       }
+      let activity = [];
+      if (isManagement) {
+        try {
+          activity = await fetchAllRows(() => supabase
+            .from('management_activity')
+            .select('*')
+            .order('occurred_at', { ascending: false })
+            .order('id', { ascending: false }));
+          activity.reverse();
+          setActivityAvailable(true);
+        } catch (error) {
+          if (['42P01', 'PGRST205'].includes(error.code)) {
+            setActivityAvailable(false);
+          } else {
+            throw error;
+          }
+        }
+      }
       if (['admin', 'design', 'engineer', 'tech'].includes(profile?.role)) {
         const { data: assignments, error: assignmentsError } = await supabase
           .from('legacy_area_assignments')
@@ -2365,16 +2576,19 @@ function App() {
         setTechnicianUsers([]);
       }
       const districtResult = canonicalizeDistricts(nextRecords);
-      for (const change of districtResult.changes) {
-        const update = { district: change.district };
-        if (change.city) update.city = change.city;
-        const { error: districtError } = await supabase.from(resources[change.type].table).update(update).eq('id', change.id);
-        if (districtError) throw districtError;
+      if (!isManagement) {
+        for (const change of districtResult.changes) {
+          const update = { district: change.district };
+          if (change.city) update.city = change.city;
+          const { error: districtError } = await supabase.from(resources[change.type].table).update(update).eq('id', change.id);
+          if (districtError) throw districtError;
+        }
       }
       setRecords(districtResult.normalized);
       setPlannedRows(planned || []);
       setPlannedRoutes(routes || []);
       setPlannedAssets(assets || []);
+      if (isManagement) setManagementActivity(activity);
       setMessage('تم تحديث البيانات بنجاح.');
     } catch (error) {
       setMessage(`تعذر تحميل البيانات: ${error.message}`);
@@ -2382,6 +2596,7 @@ function App() {
       setBusy(false);
     }
   }
+  loadAllRef.current = loadAll;
 
   async function uploadPlannedPoints(points, metadata) {
     if (!hasSupabaseConfig || !supabase) throw new Error('إعدادات Supabase غير موجودة.');
@@ -2931,7 +3146,7 @@ function App() {
   }
 
   return (
-    <main className={`app ${isAdminView ? 'adminMode' : ''} ${isAdminView && adminPage === 'dashboard' ? 'dashboardMode' : ''} ${isAdminView && adminPage === 'data' ? 'dataMode' : ''}`}>
+    <main className={`app ${isAdminView ? 'adminMode' : ''} ${isAdminView && adminPage === 'dashboard' ? 'dashboardMode' : ''} ${isAdminView && adminPage === 'data' ? 'dataMode' : ''} ${isManagement && adminPage === 'operations' ? 'managementOpsMode' : ''}`}>
       <header className="topbar">
         {isAdminView ? (
           <div className="tbF" aria-label="Admin toolbar">
@@ -3032,6 +3247,9 @@ function App() {
           <button type="button" className={adminPage === 'dashboard' ? 'active' : ''} onClick={() => setAdminPage('dashboard')}>
             Dashboard
           </button>
+          {isManagement && <button type="button" className={adminPage === 'operations' ? 'active' : ''} onClick={() => setAdminPage('operations')}>
+            Operations
+          </button>}
           <button type="button" className={adminPage === 'data' ? 'active' : ''} onClick={() => setAdminPage('data')}>
             Data
           </button>
@@ -3047,6 +3265,19 @@ function App() {
 
       {isAdminView && adminPage === 'dashboard' && (
         <PolePlantingDashboard records={records.column_checks} onRefresh={loadAll} busy={busy} onDelete={deleteRecord} readOnly={isManagement} />
+      )}
+
+      {isManagement && adminPage === 'operations' && (
+        <ManagementWorkspace
+          plannedRows={plannedRows}
+          plannedRoutes={plannedRoutes}
+          plannedAssets={plannedAssets}
+          plantingRows={records.column_checks}
+          activityRows={managementActivity}
+          activityAvailable={activityAvailable}
+          onRefresh={loadAll}
+          busy={busy}
+        />
       )}
 
       {isAdmin && adminPage === 'users' && (
@@ -3113,7 +3344,7 @@ function App() {
         ))}
       </nav>}
 
-      {message && (!isAdminView || adminPage === 'data') && <div className="notice">{message}</div>}
+      {message && (!isAdminView || adminPage === 'data' || (isManagement && adminPage === 'operations')) && <div className="notice">{message}</div>}
 
       {(!isAdminView || adminPage === 'data') && <section className="workspace">
         <div className={`mapShell ${mapExpanded ? 'expandedMap' : ''}`}>

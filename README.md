@@ -24,6 +24,8 @@ npm run dev
 supabase/schema.sql
 ```
 
+بعد تشغيل `schema.sql`، طبّق ملفات التحديث الجديدة من `supabase/migrations` على قاعدة البيانات (للمشاريع الجديدة والموجودة). سجل عمليات Management موجود في `20261019120702_management_activity_audit.sql`؛ من دونه ستظهر الحالة الحالية فقط ولن يظهر سجل الإجراءات.
+
 الملف ينشئ الجداول التالية:
 
 - `buildings`

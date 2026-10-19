@@ -658,6 +658,211 @@ body {
   }
 }
 
+.managementOps {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.managementOpsHeading {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.managementOpsHeading > div > span {
+  color: #b8863b;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+}
+
+.managementOpsHeading h2 {
+  color: #0f2a4a;
+  font-family: Fraunces, Georgia, serif;
+  font-size: 26px;
+  margin: 3px 0;
+}
+
+.managementOpsHeading p {
+  color: #60738a;
+  font-size: 13px;
+  margin: 0;
+}
+
+.managementOpsStats {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.managementOpsStats article {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dce7f1;
+  border-radius: 8px;
+  color: #35536f;
+  display: grid;
+  gap: 4px 10px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  min-width: 0;
+  padding: 14px;
+}
+
+.managementOpsStats article svg {
+  color: #b8863b;
+  grid-row: span 2;
+}
+
+.managementOpsStats article span {
+  color: #687f95;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.managementOpsStats article strong {
+  color: #0f2a4a;
+  font-size: 23px;
+  line-height: 1.1;
+}
+
+.managementOpsGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.managementOps .dashboardPanel {
+  border-radius: 8px;
+  min-width: 0;
+  padding: 15px;
+}
+
+.managementOps .dashboardPanelHead {
+  margin-bottom: 12px;
+}
+
+.managementTable {
+  min-width: 800px;
+}
+
+.managementTable td {
+  vertical-align: top;
+}
+
+.managementTable td small {
+  color: #77899a;
+  display: block;
+  font-size: 10px;
+  margin-top: 3px;
+}
+
+.managementTable .idCell {
+  max-width: 180px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.managementActivityPanel {
+  min-width: 0;
+}
+
+.managementDesignMap {
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  height: 520px;
+  overflow: hidden;
+}
+
+.managementDesignMap .map {
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+}
+
+.managementActivityFilters {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(220px, 1.2fr);
+  margin-bottom: 12px;
+}
+
+.managementActivityFilters label {
+  color: #597087;
+  display: grid;
+  font-size: 11px;
+  font-weight: 800;
+  gap: 5px;
+}
+
+.managementActivityFilters select,
+.managementActivityFilters input {
+  background: #f8fafc;
+  border: 1px solid #dbe4ef;
+  border-radius: 7px;
+  color: #142b45;
+  min-height: 40px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.managementActivityNotice {
+  margin: 0;
+}
+
+.managementTableHint {
+  color: #71849a;
+  font-size: 11px;
+  font-weight: 700;
+  margin: 10px 0 0;
+}
+
+@media (max-width: 980px) {
+  .managementOpsGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .managementOpsStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .managementOpsHeading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .managementOpsHeading h2 {
+    font-size: 22px;
+  }
+
+  .managementOpsStats {
+    gap: 7px;
+  }
+
+  .managementOpsStats article {
+    padding: 10px;
+  }
+
+  .managementOpsStats article span {
+    font-size: 10px;
+  }
+
+  .managementOpsStats article strong {
+    font-size: 19px;
+  }
+
+  .managementActivityFilters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .managementDesignMap {
+    height: 420px;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
