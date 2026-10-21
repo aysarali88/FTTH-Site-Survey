@@ -659,6 +659,15 @@ function isPlannedPoleStyle(styleKey) {
   return /(?:new|planned)[_\s-]*poles?/i.test(styleKey);
 }
 
+function isPlannedPoleFeature(styleKey, properties) {
+  if (isPlannedPoleStyle(styleKey)) return true;
+  const explicitMetadata = Object.entries(properties || {})
+    .filter(([key]) => /^(?:layer|refname|type)$/i.test(key))
+    .map(([, value]) => String(value || ''))
+    .join(' ');
+  return /(?:new|planned)[_\s-]*poles?/i.test(explicitMetadata);
+}
+
 function kmlColor(color, fallback = '#475569') {
   const value = String(color || '').trim();
   if (!/^[\da-f]{8}$/i.test(value)) return { color: fallback, opacity: 1 };
@@ -773,7 +782,7 @@ function parseKmlDocument(text) {
     const properties = parseKmlExtendedData(placemark);
     const featureName = name || properties.ID || properties.Id || properties.id || styleLabel;
     parseKmlPlacemarkGeometries(placemark).forEach((geometry, geometryIndex) => {
-      if (geometry.geometry_type === 'point' && (isPlannedPoleStyle(styleKey) || (!styleKey && !hasStyledFeatures))) {
+      if (geometry.geometry_type === 'point' && (isPlannedPoleFeature(styleKey, properties) || (!styleKey && !hasStyledFeatures))) {
         const [latitude, longitude] = geometry.coordinates;
         pointIndex += 1;
         points.push({
