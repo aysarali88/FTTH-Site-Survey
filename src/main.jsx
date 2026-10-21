@@ -914,6 +914,47 @@ function MapResizeSync({ expanded }) {
   return null;
 }
 
+function MapFullscreenControl() {
+  const map = useMap();
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setExpanded(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    const frame = map.getContainer().parentElement;
+    frame?.classList.toggle('expandedMap', expanded);
+    document.body.classList.toggle('map-fullscreen-active', expanded);
+
+    return () => {
+      frame?.classList.remove('expandedMap');
+      document.body.classList.remove('map-fullscreen-active');
+    };
+  }, [map, expanded]);
+
+  return <>
+    <button
+      className="mapExpandButton"
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        setExpanded((value) => !value);
+      }}
+      title={expanded ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}
+      aria-label={expanded ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}
+      aria-pressed={expanded}
+    >
+      {expanded ? <Minimize2 size={19} /> : <Expand size={19} />}
+    </button>
+    <MapResizeSync expanded={expanded} />
+  </>;
+}
+
 function CurrentLocationControl({ onLocated }) {
   const map = useMap();
   const [position, setPosition] = useState(null);
@@ -1304,7 +1345,7 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = 
             <MapContainer center={mapCenter} zoom={12} maxZoom={22} scrollWheelZoom className="dashboardMap" zoomControl rotate touchRotate rotateControl={{ closeOnZeroBearing: false, position: 'topright' }} bearing={0}>
               <MapLayers />
               <CurrentLocationControl />
-              <MapResizeSync expanded={false} />
+              <MapFullscreenControl />
           <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} onDelete={onDelete} canDelete={!readOnly} />
             </MapContainer>
           </div>
@@ -1657,7 +1698,7 @@ function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMa
     <MapContainer center={center} zoom={14} maxZoom={22} scrollWheelZoom className="map" zoomControl rotate touchRotate rotateControl={{ closeOnZeroBearing: false, position: 'topright' }} bearing={0}>
       <MapLayers />
       <CurrentLocationControl />
-      <MapResizeSync expanded={false} />
+      <MapFullscreenControl />
       <MapFitToContent rows={rows} paths={paths} assets={assets} />
       <EngineerMapClickHandler enabled={addMode} onMapClick={onMapClick} />
       <ImportedDesignAssets assets={assets} />
@@ -1904,7 +1945,7 @@ function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, 
           <CurrentLocationControl onLocated={(next) => { setLocation(next); setMessage('تم تحديد موقعك الحالي.'); }} />
           <MapCenterSync value={location} onChange={setLocation} />
           <MapFitToContent rows={mapRows} />
-          <MapResizeSync expanded={false} />
+          <MapFullscreenControl />
           <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} />
         </MapContainer>
         <div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div>
@@ -2122,7 +2163,6 @@ function App() {
   const [message, setMessage] = useState('');
   const [photoFile, setPhotoFile] = useState(null);
   const [formDrawerOpen, setFormDrawerOpen] = useState(false);
-  const [mapExpanded, setMapExpanded] = useState(false);
   const [adminFilters, setAdminFilters] = useState({ district: '', techName: '', type: 'all' });
   const [adminPage, setAdminPage] = useState(() => readSavedProfile()?.role === 'management' ? 'operations' : 'data');
   const [managementActivity, setManagementActivity] = useState([]);
@@ -2340,11 +2380,6 @@ function App() {
       void supabase.removeChannel(channel);
     };
   }, [isManagement]);
-
-  useEffect(() => {
-    document.body.classList.toggle('map-fullscreen-active', mapExpanded);
-    return () => document.body.classList.remove('map-fullscreen-active');
-  }, [mapExpanded]);
 
   async function saveProfile(loginDetails) {
     if (loginDetails.legacyAdmin) {
@@ -3347,16 +3382,7 @@ function App() {
       {message && (!isAdminView || adminPage === 'data' || (isManagement && adminPage === 'operations')) && <div className="notice">{message}</div>}
 
       {(!isAdminView || adminPage === 'data') && <section className="workspace">
-        <div className={`mapShell ${mapExpanded ? 'expandedMap' : ''}`}>
-          <button
-            className="mapExpandButton"
-            type="button"
-            onClick={() => setMapExpanded((expanded) => !expanded)}
-            title={mapExpanded ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}
-            aria-label={mapExpanded ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}
-          >
-            {mapExpanded ? <Minimize2 size={19} /> : <Expand size={19} />}
-          </button>
+        <div className="mapShell">
           {!isManagement && <button className="mapAddButton" type="button" onClick={() => setFormDrawerOpen(true)}>
             <Plus size={18} />
             إضافة
@@ -3380,7 +3406,7 @@ function App() {
             <MapLayers />
             <CurrentLocationControl onLocated={(next) => { setLocation(next); setMessage('تم تحديد موقعك الحالي.'); }} />
             <MapCenterSync value={form} onChange={setLocation} />
-            <MapResizeSync expanded={mapExpanded} />
+            <MapFullscreenControl />
             <FastSurveyMarkers groupedRecords={mapRecords} onDelete={deleteRecord} canDelete={isAdmin} />
           </MapContainer>
           {hiddenMapMarkers > 0 && (

@@ -1483,6 +1483,13 @@ button:disabled {
   z-index: 2000;
 }
 
+.expandedMap > .leaflet-container,
+.expandedMap > .dashboardMap {
+  height: 100% !important;
+  min-height: 100% !important;
+  width: 100% !important;
+}
+
 .expandedMap .map {
   height: 100dvh;
   min-height: 100dvh;
@@ -1490,8 +1497,8 @@ button:disabled {
 }
 
 .expandedMap .mapExpandButton {
-  bottom: 20px;
-  right: 20px;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  right: max(20px, env(safe-area-inset-right));
   z-index: 2100;
 }
 
@@ -2735,10 +2742,6 @@ td {
     width: 62px;
   }
 
-  .mapExpandButton {
-    display: none;
-  }
-
   .logoutButton {
     display: inline-flex;
     border-radius: 999px;
@@ -3047,4 +3050,13 @@ td {
   td {
     padding: 10px;
   }
+}
+
+.expandedMap {
+  z-index: 8000 !important;
+}
+
+.adminMode .designPreviewMap.expandedMap {
+  position: fixed !important;
+  z-index: 8000 !important;
 }
