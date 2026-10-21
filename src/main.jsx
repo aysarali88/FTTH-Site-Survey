@@ -136,21 +136,17 @@ const resources = {
       city: '',
       district: '',
       tech_name: '',
-      has_objection: 'لا',
-      is_existing: 'لا',
-      is_planted: 'لا',
+      is_planted: '',
+      planting_reason: '',
       notes: '',
       photo_url: '',
     },
     fields: [
       ['district', 'district', 'text'],
       ['tech_name', 'tech name', 'text'],
-      ['has_objection', 'هل عليه اعتراض', 'select', ['نعم', 'لا']],
-      ['is_planted', 'هل تم زرعه', 'select', ['نعم', 'لا']],
-      ['is_existing', 'هل هو موجود', 'select', ['نعم', 'لا']],
-      ['notes', 'ملاحظة', 'textarea'],
+      ['is_planted', 'هل تمت زراعته؟', 'select', ['نعم', 'لا']],
     ],
-    columns: ['id', 'latitude', 'longitude', 'city', 'district', 'tech_name', 'has_objection', 'is_existing', 'is_planted', 'record_date', 'record_time', 'photo_url', 'notes'],
+    columns: ['id', 'latitude', 'longitude', 'city', 'district', 'tech_name', 'has_objection', 'is_existing', 'is_planted', 'planting_reason', 'record_date', 'record_time', 'photo_url', 'notes'],
   },
 };
 
@@ -176,7 +172,8 @@ const labels = {
   pole_status: 'Pole Status',
   has_objection: 'هل عليه اعتراض',
   is_existing: 'هل هو موجود',
-  is_planted: 'هل تم زرعه',
+  is_planted: 'هل تمت زراعته؟',
+  planting_reason: 'سبب عدم الزراعة',
 };
 
 const markerIcons = {
@@ -585,6 +582,12 @@ function excelYesNoToBoolean(value) {
   return ['yes', 'true', '1', 'نعم', 'ظ†ط¹ظ…'].includes(normalized);
 }
 
+function excelNullableYesNo(value) {
+  if (typeof value === 'boolean') return value;
+  if (value === undefined || value === null || String(value).trim() === '') return null;
+  return excelYesNoToBoolean(value);
+}
+
 function getWorksheetRows(workbook, sheetNames) {
   const normalizedNames = new Map(workbook.SheetNames.map((name) => [name.trim().toLowerCase(), name]));
   const sheetName = sheetNames.map((name) => normalizedNames.get(name.trim().toLowerCase())).find(Boolean);
@@ -869,10 +872,12 @@ function buildRowsFromWorkbook(workbook) {
         city: readCell(row, ['City', 'city']),
         district: readCell(row, ['district', 'District']),
         tech_name: readCell(row, ['tech name', 'Technician', 'tech_name']),
-        has_objection: excelYesNoToBoolean(readCell(row, [labels.has_objection, 'has_objection', 'Has objection'])),
-        is_existing: excelYesNoToBoolean(readCell(row, [labels.is_existing, 'is_existing', 'Is existing'])),
-        is_planted: excelYesNoToBoolean(readCell(row, [labels.is_planted, 'is_planted', 'Is planted'])),
-        notes: readCell(row, ['Notes', 'notes', labels.notes]),
+        has_objection: excelNullableYesNo(readCell(row, [labels.has_objection, 'has_objection', 'Has objection'])),
+        is_existing: excelNullableYesNo(readCell(row, [labels.is_existing, 'is_existing', 'Is existing'])),
+        is_planted: excelYesNoToBoolean(readCell(row, [labels.is_planted, 'هل تم زرعه', 'هل تمت زراعته', 'is_planted', 'Is planted'])),
+        planting_reason: readCell(row, [labels.planting_reason, 'planting_reason', 'Planting reason']),
+        form_version: 1,
+        notes: readCell(row, ['Notes', 'notes', 'ملاحظة', labels.notes]),
         photo_url: readCell(row, ['Photo URL', 'photo_url']),
       }))
       .filter((row) => Number.isFinite(row.latitude) && Number.isFinite(row.longitude)),
@@ -1185,6 +1190,7 @@ function SurveyMarkers({ groupedRecords, onDelete, canDelete }) {
             <span>{row.id}</span>
             <span>{row.district || '-'}</span>
             <span>{row.tech_name || '-'}</span>
+            {row.planting_reason && <span>سبب عدم الزراعة: {row.planting_reason}</span>}
             <span>{formatDate(row.created_at || row.survey_date)} {formatTime(row.created_at)}</span>
             {row.photo_url && <a href={row.photo_url} target="_blank" rel="noreferrer">فتح الصورة</a>}
             {canDelete && (
@@ -1209,6 +1215,7 @@ function FastSurveyMarkers({ groupedRecords, onDelete, canDelete }) {
             <span>الإحداثيات: {row.latitude}, {row.longitude}</span>
             <span>{row.district || '-'}</span>
             <span>{row.tech_name || '-'}</span>
+            {row.planting_reason && <span>سبب عدم الزراعة: {row.planting_reason}</span>}
             <span>{formatDate(row.created_at || row.survey_date)} {formatTime(row.created_at)}</span>
             {row.photo_url && (
               <a href={row.photo_url} target="_blank" rel="noreferrer">
@@ -1390,7 +1397,7 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = 
 
       <article className="dashboardPanel dashboardRecentPanel">
         <div className="dashboardPanelHead"><div><h3>Recent pole planting records</h3><span>Latest points matching the current filters</span></div><span className="dashboardResultCount">{filteredRows.length} records</span></div>
-        <div className="dashboardRecentWrap"><table className="dashboardRecentTable"><thead><tr><th>ID</th><th>City</th><th>District</th><th>Technician</th><th>Planted</th><th>Objection</th><th>Date</th><th>Location</th></tr></thead><tbody>{filteredRows.slice(0, 15).map((row) => <tr key={row.id}><td className="idCell">{row.id}</td><td>{row.city}</td><td>{row.district || '-'}</td><td>{row.tech_name || '-'}</td><td><span className={`statusPill ${yesNoToBoolean(row.is_planted) ? 'statusGood' : 'statusWarn'}`}>{yesNoToBoolean(row.is_planted) ? 'Yes' : 'No'}</span></td><td><span className={`statusPill ${yesNoToBoolean(row.has_objection) ? 'statusBad' : 'statusGood'}`}>{yesNoToBoolean(row.has_objection) ? 'Yes' : 'No'}</span></td><td>{row.record_date} {row.record_time}</td><td dir="ltr">{row.latitude}, {row.longitude}</td></tr>)}{!filteredRows.length && <tr><td colSpan="8" className="dashboardEmptyCell">No records for the selected filters.</td></tr>}</tbody></table></div>
+        <div className="dashboardRecentWrap"><table className="dashboardRecentTable"><thead><tr><th>ID</th><th>City</th><th>District</th><th>Technician</th><th>Planted</th><th>Reason</th><th>Objection</th><th>Date</th><th>Location</th></tr></thead><tbody>{filteredRows.slice(0, 15).map((row) => <tr key={row.id}><td className="idCell">{row.id}</td><td>{row.city}</td><td>{row.district || '-'}</td><td>{row.tech_name || '-'}</td><td><span className={`statusPill ${yesNoToBoolean(row.is_planted) ? 'statusGood' : 'statusWarn'}`}>{yesNoToBoolean(row.is_planted) ? 'Yes' : 'No'}</span></td><td>{row.planting_reason || '-'}</td><td>{formatValue(row.has_objection)}</td><td>{row.record_date} {row.record_time}</td><td dir="ltr">{row.latitude}, {row.longitude}</td></tr>)}{!filteredRows.length && <tr><td colSpan="9" className="dashboardEmptyCell">No records for the selected filters.</td></tr>}</tbody></table></div>
       </article>
     </section>
   );
@@ -1530,9 +1537,9 @@ function ManagementWorkspace({ plannedRows, plannedRoutes, plannedAssets, planti
 
       <article className="dashboardPanel managementActivityPanel">
         <div className="dashboardPanelHead"><div><h3>Technician field work</h3><span>Latest 30 of {plantingRows.length} planting and field records</span></div><UsersRound size={19} /></div>
-        <div className="dashboardRecentWrap"><table className="dashboardRecentTable managementTable"><thead><tr><th>When</th><th>Technician</th><th>Area</th><th>Planted</th><th>Existing</th><th>Objection</th><th>Record</th></tr></thead><tbody>
-          {recentPlantings.map((row) => <tr key={row.id}><td>{formatDate(row.created_at)} {formatTime(row.created_at)}</td><td>{row.tech_name || '-'}</td><td>{row.city || '-'} · {row.district || '-'}</td><td><span className={`statusPill ${yesNoToBoolean(row.is_planted) ? 'statusGood' : 'statusWarn'}`}>{yesNoToBoolean(row.is_planted) ? 'Yes' : 'No'}</span></td><td>{yesNoToBoolean(row.is_existing) ? 'Yes' : 'No'}</td><td>{yesNoToBoolean(row.has_objection) ? 'Yes' : 'No'}</td><td className="idCell">{row.id}</td></tr>)}
-          {!recentPlantings.length && <tr><td colSpan="7" className="dashboardEmptyCell">No technician records found.</td></tr>}
+        <div className="dashboardRecentWrap"><table className="dashboardRecentTable managementTable"><thead><tr><th>When</th><th>Technician</th><th>Area</th><th>Planted</th><th>Reason</th><th>Existing</th><th>Objection</th><th>Record</th></tr></thead><tbody>
+          {recentPlantings.map((row) => <tr key={row.id}><td>{formatDate(row.created_at)} {formatTime(row.created_at)}</td><td>{row.tech_name || '-'}</td><td>{row.city || '-'} · {row.district || '-'}</td><td><span className={`statusPill ${yesNoToBoolean(row.is_planted) ? 'statusGood' : 'statusWarn'}`}>{yesNoToBoolean(row.is_planted) ? 'Yes' : 'No'}</span></td><td>{row.planting_reason || '-'}</td><td>{formatValue(row.is_existing)}</td><td>{formatValue(row.has_objection)}</td><td className="idCell">{row.id}</td></tr>)}
+          {!recentPlantings.length && <tr><td colSpan="8" className="dashboardEmptyCell">No technician records found.</td></tr>}
         </tbody></table></div>
       </article>
     </section>
@@ -1946,9 +1953,8 @@ function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, 
   const activeAssignments = (assignments || []).filter((assignment) => assignment.active !== false);
   const [selectedAreaId, setSelectedAreaId] = useState(activeAssignments[0]?.id || '');
   const [location, setLocation] = useState(defaultLocation);
-  const [hasObjection, setHasObjection] = useState('لا');
-  const [isExisting, setIsExisting] = useState('لا');
-  const [notes, setNotes] = useState('');
+  const [isPlanted, setIsPlanted] = useState('');
+  const [plantingReason, setPlantingReason] = useState('');
   const [photoFile, setPhotoFile] = useState(null);
   const [message, setMessage] = useState('');
   const [controlsOpen, setControlsOpen] = useState(false);
@@ -1967,6 +1973,13 @@ function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, 
   }, [activeAssignments, selectedArea]);
 
   useEffect(() => {
+    setIsPlanted('');
+    setPlantingReason('');
+    setPhotoFile(null);
+    setMessage('');
+  }, [selectedAreaId]);
+
+  useEffect(() => {
     const lastRecord = areaRows[0];
     if (lastRecord) {
       setLocation({ latitude: Number(lastRecord.latitude), longitude: Number(lastRecord.longitude) });
@@ -1980,22 +1993,28 @@ function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, 
   async function submit() {
     if (!selectedArea) return;
     setMessage('');
+    if (!isPlanted) {
+      setMessage('حدد هل تمت زراعة العمود.');
+      return;
+    }
+    if (isPlanted === 'لا' && !plantingReason.trim()) {
+      setMessage('اكتب سبب عدم زراعة العمود.');
+      return;
+    }
     try {
       await onAdd({
         latitude: location.latitude,
         longitude: location.longitude,
         city: selectedArea.city,
         district: selectedArea.district,
-        hasObjection: hasObjection === 'نعم',
-        isExisting: isExisting === 'نعم',
-        notes,
-        photoFile,
+        isPlanted: isPlanted === 'نعم',
+        plantingReason: isPlanted === 'لا' ? plantingReason.trim() : '',
+        photoFile: isPlanted === 'نعم' ? photoFile : null,
       });
       setPhotoFile(null);
-      setNotes('');
-      setHasObjection('لا');
-      setIsExisting('لا');
-      setMessage('تم تسجيل زراعة العمود بنجاح.');
+      setPlantingReason('');
+      setIsPlanted('');
+      setMessage(isPlanted === 'نعم' ? 'تم تسجيل زراعة العمود بنجاح.' : 'تم تسجيل سبب عدم الزراعة، والعمود ما زال بانتظار الزراعة.');
     } catch (error) {
       setMessage(`تعذر الحفظ: ${error.message}`);
     }
@@ -2045,15 +2064,12 @@ function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, 
           <label>Latitude<input value={location.latitude} readOnly /></label>
           <label>Longitude<input value={location.longitude} readOnly /></label>
         </div>
-        <div className="fieldGrid">
-          <label>هل عليه اعتراض<select value={hasObjection} onChange={(event) => setHasObjection(event.target.value)}><option>لا</option><option>نعم</option></select></label>
-          <label>هل هو موجود<select value={isExisting} onChange={(event) => setIsExisting(event.target.value)}><option>لا</option><option>نعم</option></select></label>
-        </div>
-        <label style={{ marginTop: 14 }}>ملاحظة<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
-        <label className="photoBox" style={{ marginTop: 14 }}><Camera size={22} /><span>{photoFile ? photoFile.name : 'التقاط صورة للعمود'}</span><input type="file" accept="image/*" capture="environment" onChange={(event) => setPhotoFile(event.target.files?.[0] || null)} /></label>
-        <button className="save" type="button" onClick={submit} disabled={busy}>{busy ? 'جارٍ الحفظ...' : 'تسجيل الزراعة'}</button>
+        <label style={{ marginTop: 14 }}>هل تمت زراعته؟<select required value={isPlanted} onChange={(event) => { setIsPlanted(event.target.value); if (event.target.value !== 'نعم') setPhotoFile(null); if (event.target.value === 'نعم') setPlantingReason(''); }}><option value="">اختر...</option><option>نعم</option><option>لا</option></select></label>
+        {isPlanted === 'لا' && <label style={{ marginTop: 14 }}>سبب عدم الزراعة<textarea required rows="4" value={plantingReason} onChange={(event) => setPlantingReason(event.target.value)} placeholder="اكتب سبب عدم زراعة العمود" /></label>}
+        {isPlanted === 'نعم' && <label className="photoBox" style={{ marginTop: 14 }}><Camera size={22} /><span>{photoFile ? photoFile.name : 'إضافة صورة للعمود (اختياري)'}</span><input type="file" accept="image/*" capture="environment" onChange={(event) => setPhotoFile(event.target.files?.[0] || null)} /></label>}
+        <button className="save" type="button" onClick={submit} disabled={busy}>{busy ? 'جارٍ الحفظ...' : 'حفظ'}</button>
         {message && <div className="notice">{message}</div>}
-        <div className="legacyCount">تم تسجيل {areaRows.length} عمود في هذه المنطقة.</div>
+        <div className="legacyCount">سجلات المنطقة: {areaRows.length} · تمت زراعة {areaRows.filter((row) => yesNoToBoolean(row.is_planted)).length}</div>
       </section>
     </section>
   );
@@ -2064,9 +2080,8 @@ function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], planned
   const available = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status) && (profile.role === 'supervisor' || row.assigned_to === profile.username || row.assigned_to === profile.techName));
   const pointsForPlanting = isTechnician ? available.filter((row) => row.validation_status === 'validated') : available;
   const [selectedId, setSelectedId] = useState(pointsForPlanting[0]?.id || '');
-  const [hasObjection, setHasObjection] = useState('لا');
-  const [isExisting, setIsExisting] = useState('لا');
-  const [notes, setNotes] = useState('');
+  const [isPlanted, setIsPlanted] = useState('');
+  const [plantingReason, setPlantingReason] = useState('');
   const [photoFile, setPhotoFile] = useState(null);
   const [message, setMessage] = useState('');
   const [controlsOpen, setControlsOpen] = useState(false);
@@ -2077,6 +2092,13 @@ function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], planned
     if (!selected) setSelectedId(pointsForPlanting[0]?.id || '');
   }, [pointsForPlanting, selected]);
 
+  useEffect(() => {
+    setIsPlanted('');
+    setPlantingReason('');
+    setPhotoFile(null);
+    setMessage('');
+  }, [selectedId]);
+
   function switchWorkflowMode(mode) {
     setWorkflowMode(mode);
     setControlsOpen(false);
@@ -2086,10 +2108,24 @@ function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], planned
   async function submit() {
     if (!selected || selected.validation_status === 'planted') return;
     setMessage('');
+    if (!isPlanted) {
+      setMessage('حدد هل تمت زراعة العمود.');
+      return;
+    }
+    if (isPlanted === 'لا' && !plantingReason.trim()) {
+      setMessage('اكتب سبب عدم زراعة العمود.');
+      return;
+    }
     try {
-      await onPlant(selected, { hasObjection: hasObjection === 'نعم', isExisting: isExisting === 'نعم', notes, photoFile });
+      await onPlant(selected, {
+        isPlanted: isPlanted === 'نعم',
+        plantingReason: isPlanted === 'لا' ? plantingReason.trim() : '',
+        photoFile: isPlanted === 'نعم' ? photoFile : null,
+      });
       setPhotoFile(null);
-      setMessage('تم تسجيل زراعة العمود بنجاح.');
+      setPlantingReason('');
+      setIsPlanted('');
+      setMessage(isPlanted === 'نعم' ? 'تم تسجيل زراعة العمود بنجاح.' : 'تم تسجيل سبب عدم الزراعة، والعمود ما زال بانتظار الزراعة.');
     } catch (error) {
       setMessage(`تعذر الحفظ: ${error.message}`);
     }
@@ -2114,10 +2150,10 @@ function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], planned
         <label style={{ marginTop: 14 }}>Point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{pointsForPlanting.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} - {row.validation_status}</option>)}</select></label>
         {selected && <>
           <div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div>
-          <div className="fieldGrid"><label>هل عليه اعتراض<select value={hasObjection} onChange={(event) => setHasObjection(event.target.value)}><option>لا</option><option>نعم</option></select></label><label>هل هو موجود<select value={isExisting} onChange={(event) => setIsExisting(event.target.value)}><option>لا</option><option>نعم</option></select></label></div>
-          <label style={{ marginTop: 14 }}>ملاحظة<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
-          <label className="photoBox" style={{ marginTop: 14 }}><Camera size={22} /><span>{photoFile ? photoFile.name : 'التقاط صورة للعمود'}</span><input type="file" accept="image/*" capture="environment" onChange={(event) => setPhotoFile(event.target.files?.[0] || null)} /></label>
-          <button className="save" type="button" onClick={submit} disabled={busy || selected.validation_status === 'planted'}>{selected.validation_status === 'planted' ? 'تمت الزراعة' : (busy ? 'جارٍ الحفظ...' : 'تسجيل الزراعة')}</button>
+          <label style={{ marginTop: 14 }}>هل تمت زراعته؟<select required value={isPlanted} onChange={(event) => { setIsPlanted(event.target.value); if (event.target.value !== 'نعم') setPhotoFile(null); if (event.target.value === 'نعم') setPlantingReason(''); }}><option value="">اختر...</option><option>نعم</option><option>لا</option></select></label>
+          {isPlanted === 'لا' && <label style={{ marginTop: 14 }}>سبب عدم الزراعة<textarea required rows="4" value={plantingReason} onChange={(event) => setPlantingReason(event.target.value)} placeholder="اكتب سبب عدم زراعة العمود" /></label>}
+          {isPlanted === 'نعم' && <label className="photoBox" style={{ marginTop: 14 }}><Camera size={22} /><span>{photoFile ? photoFile.name : 'إضافة صورة للعمود (اختياري)'}</span><input type="file" accept="image/*" capture="environment" onChange={(event) => setPhotoFile(event.target.files?.[0] || null)} /></label>}
+          <button className="save" type="button" onClick={submit} disabled={busy || selected.validation_status === 'planted'}>{selected.validation_status === 'planted' ? 'تمت الزراعة' : (busy ? 'جارٍ الحفظ...' : 'حفظ')}</button>
         </>}
         {!pointsForPlanting.length && <div className="empty" style={{ marginTop: 20 }}>{isTechnician ? 'لا توجد أعمدة معتمدة بانتظار الزراعة.' : 'لا توجد نقاط معتمدة من المهندس حتى الآن.'}</div>}
       </section>
@@ -2903,15 +2939,16 @@ function App() {
     try {
       const provisionalId = `plant-${row.id}`;
       const photoUrl = details.photoFile ? await uploadPhotoFile(details.photoFile, 'column_checks', provisionalId) : '';
-      const { data, error } = await supabase.rpc('supervisor_plant_planned_pole', {
+      const { data, error } = await supabase.rpc('supervisor_report_planned_pole', {
         p_id: row.id,
-        p_has_objection: details.hasObjection,
-        p_is_existing: details.isExisting,
-        p_notes: details.notes || null,
+        p_is_planted: details.isPlanted,
+        p_reason: details.plantingReason || null,
         p_photo_url: photoUrl || null,
       });
       if (error) throw error;
-      setPlannedRows((currentRows) => currentRows.map((item) => item.id === row.id ? data.planned : item));
+      if (data.planned.validation_status === 'planted') {
+        setPlannedRows((currentRows) => currentRows.map((item) => item.id === row.id ? data.planned : item));
+      }
       setRecords((currentRecords) => ({ ...currentRecords, column_checks: [data.record, ...currentRecords.column_checks] }));
       return data;
     } finally {
@@ -2925,14 +2962,13 @@ function App() {
     try {
       const provisionalId = `legacy-${Date.now()}`;
       const photoUrl = details.photoFile ? await uploadPhotoFile(details.photoFile, 'column_checks', provisionalId) : '';
-      const { data, error } = await supabase.rpc('technician_add_legacy_planting', {
+      const { data, error } = await supabase.rpc('technician_add_legacy_planting_v2', {
         p_latitude: Number(details.latitude),
         p_longitude: Number(details.longitude),
         p_city: details.city,
         p_district: details.district,
-        p_has_objection: details.hasObjection,
-        p_is_existing: details.isExisting,
-        p_notes: details.notes || null,
+        p_is_planted: details.isPlanted,
+        p_reason: details.plantingReason || null,
         p_photo_url: photoUrl || null,
       });
       if (error) throw error;
@@ -2944,6 +2980,18 @@ function App() {
   }
 
   function updateForm(key, value) {
+    if (active === 'column_checks' && key === 'is_planted') {
+      if (value !== 'نعم') setPhotoFile(null);
+      setForms((previous) => ({
+        ...previous,
+        [active]: {
+          ...previous[active],
+          is_planted: value,
+          planting_reason: value === 'نعم' ? '' : previous[active].planting_reason,
+        },
+      }));
+      return;
+    }
     setForms((previous) => ({
       ...previous,
       [active]: {
@@ -3048,10 +3096,18 @@ function App() {
       setMessage('لا يمكن الحفظ قبل إضافة إعدادات Supabase.');
       return;
     }
+    if (active === 'column_checks' && !['نعم', 'لا'].includes(form.is_planted)) {
+      setMessage('حدد هل تمت زراعة العمود.');
+      return;
+    }
+    if (active === 'column_checks' && form.is_planted === 'لا' && !form.planting_reason?.trim()) {
+      setMessage('اكتب سبب عدم زراعة العمود.');
+      return;
+    }
     setBusy(true);
     try {
       const recordId = form.id || makeRecordId(active);
-      const photoUrl = await uploadPhoto(recordId);
+      const photoUrl = active === 'column_checks' && form.is_planted !== 'نعم' ? null : await uploadPhoto(recordId);
       const payload = {
         ...form,
         id: recordId,
@@ -3062,7 +3118,12 @@ function App() {
         photo_url: photoUrl,
       };
 
-      if (active === 'column_checks') delete payload.survey_date;
+      if (active === 'column_checks') {
+        delete payload.survey_date;
+        payload.form_version = 2;
+        payload.planting_reason = form.is_planted === 'لا' ? form.planting_reason.trim() : null;
+        payload.notes = payload.notes?.trim() || null;
+      }
 
       ['has_objection', 'is_existing', 'is_planted'].forEach((key) => {
         if (key in payload) payload[key] = yesNoToBoolean(payload[key]);
@@ -3190,7 +3251,8 @@ function App() {
         time: row.record_time,
         'هل عليه اعتراض': booleanToYesNo(row.has_objection),
         'هل هو موجود': booleanToYesNo(row.is_existing),
-        'هل تم زرعه': booleanToYesNo(row.is_planted),
+        'هل تمت زراعته؟': booleanToYesNo(row.is_planted),
+        'سبب عدم الزراعة': row.planting_reason || '',
         Notes: row.notes || '',
         'Photo URL': row.photo_url || '',
       })),
@@ -3218,6 +3280,7 @@ function App() {
           `<b>Date:</b> ${escapeXml(row.record_date || '-')}`,
           `<b>Time:</b> ${escapeXml(row.record_time || '-')}`,
           row.notes ? `<b>Notes:</b> ${escapeXml(row.notes)}` : '',
+          row.planting_reason ? `<b>Planting reason:</b> ${escapeXml(row.planting_reason)}` : '',
           row.photo_url ? `<b>Photo:</b> <a href="${escapeXml(row.photo_url)}">Open photo</a>` : '',
         ].filter(Boolean).join('<br/>');
 
@@ -3579,16 +3642,22 @@ function App() {
                 options={options}
                 value={form[name]}
                 locked={name === 'district' || name === 'tech_name'}
+                required={active === 'column_checks' && name === 'is_planted'}
                 onChange={(value) => updateForm(name, value)}
               />
             ))}
           </div>
 
-          <label className="photoBox">
+          {active === 'column_checks' && form.is_planted === 'لا' && <label className="wide" style={{ marginTop: 14 }}>
+            سبب عدم الزراعة
+            <textarea required rows="3" value={form.planting_reason || ''} onChange={(event) => updateForm('planting_reason', event.target.value)} placeholder="اكتب سبب عدم زراعة العمود" />
+          </label>}
+
+          {(active !== 'column_checks' || form.is_planted === 'نعم') && <label className="photoBox">
             <Camera size={22} />
-            <span>{photoFile ? photoFile.name : 'التقاط صورة بالكاميرا'}</span>
+            <span>{photoFile ? photoFile.name : active === 'column_checks' ? 'إضافة صورة للعمود (اختياري)' : 'التقاط صورة بالكاميرا'}</span>
             <input type="file" accept="image/*" capture="environment" onChange={(event) => setPhotoFile(event.target.files?.[0] || null)} />
-          </label>
+          </label>}
 
           <button className="save" type="submit" disabled={busy}>
             {busy ? 'جارٍ الحفظ...' : 'حفظ السجل'}
@@ -3754,7 +3823,7 @@ function LoginPage({ onSave }) {
   );
 }
 
-function Field({ name, label, type, options, value, locked, onChange }) {
+function Field({ name, label, type, options, value, locked, required = false, onChange }) {
   if (type === 'textarea') {
     return (
       <label className="wide">
@@ -3768,7 +3837,7 @@ function Field({ name, label, type, options, value, locked, onChange }) {
     return (
       <label>
         {label}
-        <select value={value || ''} onChange={(event) => onChange(event.target.value)}>
+        <select required={required} value={value || ''} onChange={(event) => onChange(event.target.value)}>
           <option value="">اختر...</option>
           {options.map((option) => <option key={option} value={option}>{option}</option>)}
         </select>
