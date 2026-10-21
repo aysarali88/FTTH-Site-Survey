@@ -1549,10 +1549,18 @@ function managementActionLabel(action) {
   return labelsByAction[action] || action || 'Activity';
 }
 
-function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = [], plantingRows, onUpload, onDeleteBatch, onRefresh, onLogout, busy }) {
+function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = [], plantingRows, technicians, onUpload, onDeleteBatch, onValidateAll, onRefresh, onLogout, busy }) {
   const [city, setCity] = useState(profile.city || 'Misrata');
   const [district, setDistrict] = useState(profile.district || '');
   const [error, setError] = useState('');
+  const [bulkAssignedTo, setBulkAssignedTo] = useState(() => {
+    try {
+      return localStorage.getItem(`bulk-validate-technician:${profile.username || 'ryadh'}`) || '';
+    } catch {
+      return '';
+    }
+  });
+  const [bulkMessage, setBulkMessage] = useState('');
 
   async function handleFile(event) {
     const file = event.target.files?.[0];
@@ -1573,8 +1581,10 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = 
     }
   }
 
-  const pending = plannedRows.filter((row) => row.validation_status === 'pending').length;
+  const pendingRows = plannedRows.filter((row) => row.validation_status === 'pending' && !row.deleted_at);
+  const pending = pendingRows.length;
   const validated = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status)).length;
+  const canValidateAll = profile.role === 'design' && String(profile.username || '').trim().toLowerCase() === 'ryadh';
   const previewRows = plannedRows.slice(0, MAX_MAP_MARKERS);
   const previewAssets = plannedAssets.slice(0, MAX_IMPORTED_ASSETS_TO_RENDER);
   const districtOptions = CITY_DISTRICTS[city] || [];
@@ -1604,6 +1614,30 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = 
 
   const previewRoutes = plannedRoutes.slice(0, MAX_MAP_MARKERS);
 
+  async function validateAllPending() {
+    if (!canValidateAll || !pendingRows.length) return;
+    if (!bulkAssignedTo) {
+      setBulkMessage('اختر الفني الذي ستُسند إليه النقاط.');
+      return;
+    }
+    const count = pendingRows.length;
+    if (!window.confirm(`Validate all ${count} pending points and assign them to ${bulkAssignedTo}?`)) return;
+
+    setBulkMessage('');
+    try {
+      const updated = await onValidateAll(pendingRows.map((row) => row.id), bulkAssignedTo);
+      try {
+        localStorage.setItem(`bulk-validate-technician:${profile.username || 'ryadh'}`, bulkAssignedTo);
+      } catch {
+        // The database assignment remains authoritative if local storage is unavailable.
+      }
+      const skipped = count - updated.length;
+      setBulkMessage(`تم اعتماد ${updated.length} نقطة وإسنادها إلى ${bulkAssignedTo}.${skipped ? ` تم تجاوز ${skipped} نقطة لم تعد بحالة Pending.` : ''}`);
+    } catch (validationError) {
+      setBulkMessage(`تعذر اعتماد النقاط: ${validationError.message}`);
+    }
+  }
+
   return (
     <main className="app adminMode">
       <header className="topbar">
@@ -1620,6 +1654,16 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = 
         <article><Target size={19} /><span>Pending validation</span><strong>{pending}</strong></article>
         <article><CheckCircle2 size={19} /><span>Validated / planted</span><strong>{validated}</strong></article>
       </section>
+
+      {canValidateAll && <section className="records" style={{ padding: 20, marginBottom: 16 }}>
+        <div className="recordsHeader"><div><h2>Validate all pending points</h2><span>Approve every pending pole and assign it to one technician.</span></div><Target size={20} /></div>
+        <div className="bulkValidatePanel" style={{ marginTop: 14, marginBottom: 0 }}>
+          <div><strong>{pending} pending points</strong><span>{pending ? 'All pending poles will be validated and assigned together.' : 'There are no pending points to validate.'}</span></div>
+          <label>Assign all to<select value={bulkAssignedTo} onChange={(event) => setBulkAssignedTo(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>
+          <button className="save" type="button" onClick={validateAllPending} disabled={busy || !pending || !bulkAssignedTo}>Validate all {pending}</button>
+        </div>
+        {bulkMessage && <div className="notice" style={{ marginTop: 12 }}>{bulkMessage}</div>}
+      </section>}
 
       <section className="records" style={{ padding: 20, marginBottom: 16 }}>
         <div className="recordsHeader"><div><h2>Upload KMZ plan</h2><span>New poles go to validation; other design features stay as map references.</span></div></div>
@@ -1741,7 +1785,7 @@ function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMa
   );
 }
 
-function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = [], technicians, onRefresh, onLogout, onValidate, onValidateAll, onMove, onDelete, onAdd, busy }) {
+function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = [], technicians, onRefresh, onLogout, onValidate, onMove, onDelete, onAdd, busy }) {
   const [selectedId, setSelectedId] = useState(plannedRows[0]?.id || '');
   const [status, setStatus] = useState('validated');
   const [rememberedAssignedTo, setRememberedAssignedTo] = useState(() => {
@@ -1752,7 +1796,6 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
     }
   });
   const [assignedTo, setAssignedTo] = useState('');
-  const [bulkAssignedTo, setBulkAssignedTo] = useState(rememberedAssignedTo);
   const [notes, setNotes] = useState('');
   const [city, setCity] = useState(profile.city || 'Misrata');
   const [district, setDistrict] = useState(profile.district || '');
@@ -1762,7 +1805,6 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
   const [message, setMessage] = useState('');
   const selected = plannedRows.find((row) => row.id === selectedId) || null;
   const pending = plannedRows.filter((row) => row.validation_status === 'pending' && !row.deleted_at);
-  const canValidateAll = profile.role === 'engineer' && String(profile.username || '').trim().toLowerCase() === 'ryadh';
 
   useEffect(() => {
     if (!selected && plannedRows[0]) setSelectedId(plannedRows[0].id);
@@ -1794,26 +1836,6 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
       setMessage('تم حفظ قرار الـ Validation.');
     } catch (error) {
       setMessage(`تعذر الحفظ: ${error.message}`);
-    }
-  }
-
-  async function validateAllPending() {
-    if (!canValidateAll || !pending.length) return;
-    if (!bulkAssignedTo) {
-      setMessage('اختر الفني الذي ستُسند إليه النقاط.');
-      return;
-    }
-    const count = pending.length;
-    if (!window.confirm(`Validate all ${count} pending points and assign them to ${bulkAssignedTo}?`)) return;
-
-    setMessage('');
-    try {
-      const updated = await onValidateAll(pending.map((row) => row.id), bulkAssignedTo);
-      rememberTechnician(bulkAssignedTo);
-      const skipped = count - updated.length;
-      setMessage(`تم اعتماد ${updated.length} نقطة وإسنادها إلى ${bulkAssignedTo}.${skipped ? ` تم تجاوز ${skipped} نقطة لم تعد بحالة Pending.` : ''}`);
-    } catch (error) {
-      setMessage(`تعذر اعتماد النقاط: ${error.message}`);
     }
   }
 
@@ -1876,11 +1898,6 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
          <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} paths={plannedRoutes} assets={plannedAssets} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} onMovePoint={handleMovePoint} addMode={addMode} moveMode={moveMode} />{addMode && <div className="mapAddHint">Click on the map to place a new point</div>}{moveMode && <><button className="mapMoveFinishButton" type="button" onClick={() => setMoveMode(false)}>Finish editing location</button><div className="mapMoveHint">Drag the selected point to the correct location.</div></>}<div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div></div>
         <section id="engineer-controls" className={`panel engineerControls ${controlsOpen ? 'open' : ''}`}>
           <div className="panelHeader"><div><p>Engineer review</p><h2>Validation queue</h2><span className="autoId">{plannedRows.length} planned points</span></div><Target color="#2563eb" /></div>
-          {canValidateAll && pending.length > 0 && <div className="bulkValidatePanel">
-            <div><strong>Validate all pending points</strong><span>{pending.length} points will be assigned to the selected technician.</span></div>
-            <label>Assign all to<select value={bulkAssignedTo} onChange={(event) => setBulkAssignedTo(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>
-            <button className="save" type="button" onClick={validateAllPending} disabled={busy || !bulkAssignedTo}>Validate all {pending.length}</button>
-          </div>}
           {selected && <><div className="pointDetails"><div><span>Point</span><strong>{selected.point_name || selected.id}</strong></div><div><span>Area / City</span><strong>{selected.city || '-'}</strong></div><div><span>District</span><strong>{selected.district || '-'}</strong></div><div><span>Status</span><strong>{selected.validation_status || '-'}</strong></div></div><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><button className={`ghost moveLocationButton${moveMode ? ' active' : ''}`} type="button" onClick={toggleMoveMode} disabled={busy}><MapPin size={17} />{moveMode ? 'Finish editing location' : 'Edit location'}</button>{moveMode && <div className="moveLocationHint">Drag the selected point to the correct location.</div>}<label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label>{status === 'validated' && <label>Assign technician<select value={assignedTo} onChange={(event) => rememberTechnician(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>}<label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy || (status === 'validated' && !assignedTo)}>Save decision</button><button className="dangerMini engineerDeleteButton" type="button" onClick={deleteSelected} disabled={busy || selected.validation_status === 'planted'}><Trash2 size={17} /> Delete point</button></>}
           {addMode && <div className="fieldGrid" style={{ marginBottom: 14 }}><label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label><label>District<input value={district} onChange={(event) => setDistrict(event.target.value)} /></label></div>}
           <button className="ghost" type="button" style={{ width: '100%', marginTop: 12 }} onClick={() => { setMoveMode(false); setAddMode((value) => !value); }}>{addMode ? 'Cancel add point' : 'Add point on map'}</button>
@@ -2761,7 +2778,7 @@ function App() {
 
   async function validateAllPendingPlannedPoles(ids, technician) {
     if (!supabase) throw new Error('إعدادات Supabase غير موجودة.');
-    if (profile?.role !== 'engineer' || String(profile.username || '').trim().toLowerCase() !== 'ryadh') {
+    if (profile?.role !== 'design' || String(profile.username || '').trim().toLowerCase() !== 'ryadh') {
       throw new Error('Not authorized');
     }
     if (!ids.length) return [];
@@ -3215,11 +3232,11 @@ function App() {
   }
 
   if (profile.role === 'design') {
-    return <DesignWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} plantingRows={records.column_checks} onUpload={uploadPlannedPoints} onDeleteBatch={deletePlannedBatch} onRefresh={loadAll} onLogout={changeProfile} busy={busy} />;
+    return <DesignWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} plantingRows={records.column_checks} technicians={technicianOptions} onUpload={uploadPlannedPoints} onDeleteBatch={deletePlannedBatch} onValidateAll={validateAllPendingPlannedPoles} onRefresh={loadAll} onLogout={changeProfile} busy={busy} />;
   }
 
   if (profile.role === 'engineer') {
-    return <EngineerWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} technicians={technicianOptions} onRefresh={loadAll} onLogout={changeProfile} onValidate={validatePlannedPole} onValidateAll={validateAllPendingPlannedPoles} onMove={movePlannedPole} onDelete={deletePlannedPole} onAdd={addPlannedPole} busy={busy} />;
+    return <EngineerWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} technicians={technicianOptions} onRefresh={loadAll} onLogout={changeProfile} onValidate={validatePlannedPole} onMove={movePlannedPole} onDelete={deletePlannedPole} onAdd={addPlannedPole} busy={busy} />;
   }
 
   if (profile.role === 'supervisor') {

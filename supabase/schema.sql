@@ -318,7 +318,7 @@ as $$
 declare
   actor text;
 begin
-  if public.current_app_role() <> 'engineer' then
+  if public.current_app_role() <> 'design' then
     raise exception 'Not authorized';
   end if;
 
