@@ -1560,6 +1560,8 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = 
       return '';
     }
   });
+  const [bulkCity, setBulkCity] = useState('');
+  const [bulkDistrict, setBulkDistrict] = useState('');
   const [bulkMessage, setBulkMessage] = useState('');
 
   async function handleFile(event) {
@@ -1581,10 +1583,30 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = 
     }
   }
 
-  const pendingRows = plannedRows.filter((row) => row.validation_status === 'pending' && !row.deleted_at);
+  const pendingRows = useMemo(
+    () => plannedRows.filter((row) => row.validation_status === 'pending' && !row.deleted_at),
+    [plannedRows],
+  );
   const pending = pendingRows.length;
   const validated = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status)).length;
   const canValidateAll = profile.role === 'design' && String(profile.username || '').trim().toLowerCase() === 'ryadh';
+  const pendingCities = useMemo(
+    () => [...new Set(pendingRows.map((row) => String(row.city || '').trim()).filter(Boolean))].sort(),
+    [pendingRows],
+  );
+  const pendingDistricts = useMemo(
+    () => [...new Set(pendingRows
+      .filter((row) => String(row.city || '').trim().toLowerCase() === bulkCity.toLowerCase())
+      .map((row) => String(row.district || '').trim())
+      .filter(Boolean))].sort(),
+    [pendingRows, bulkCity],
+  );
+  const selectedPendingRows = useMemo(
+    () => pendingRows.filter((row) =>
+      String(row.city || '').trim().toLowerCase() === bulkCity.toLowerCase()
+      && String(row.district || '').trim().toLowerCase() === bulkDistrict.toLowerCase()),
+    [pendingRows, bulkCity, bulkDistrict],
+  );
   const previewRows = plannedRows.slice(0, MAX_MAP_MARKERS);
   const previewAssets = plannedAssets.slice(0, MAX_IMPORTED_ASSETS_TO_RENDER);
   const districtOptions = CITY_DISTRICTS[city] || [];
@@ -1615,24 +1637,24 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = 
   const previewRoutes = plannedRoutes.slice(0, MAX_MAP_MARKERS);
 
   async function validateAllPending() {
-    if (!canValidateAll || !pendingRows.length) return;
+    if (!canValidateAll || !selectedPendingRows.length || !bulkCity || !bulkDistrict) return;
     if (!bulkAssignedTo) {
       setBulkMessage('اختر الفني الذي ستُسند إليه النقاط.');
       return;
     }
-    const count = pendingRows.length;
-    if (!window.confirm(`Validate all ${count} pending points and assign them to ${bulkAssignedTo}?`)) return;
+    const count = selectedPendingRows.length;
+    if (!window.confirm(`Validate ${count} pending points in ${bulkDistrict}, ${bulkCity} and assign them to ${bulkAssignedTo}?`)) return;
 
     setBulkMessage('');
     try {
-      const updated = await onValidateAll(pendingRows.map((row) => row.id), bulkAssignedTo);
+      const updated = await onValidateAll(selectedPendingRows.map((row) => row.id), bulkCity, bulkDistrict, bulkAssignedTo);
       try {
         localStorage.setItem(`bulk-validate-technician:${profile.username || 'ryadh'}`, bulkAssignedTo);
       } catch {
         // The database assignment remains authoritative if local storage is unavailable.
       }
       const skipped = count - updated.length;
-      setBulkMessage(`تم اعتماد ${updated.length} نقطة وإسنادها إلى ${bulkAssignedTo}.${skipped ? ` تم تجاوز ${skipped} نقطة لم تعد بحالة Pending.` : ''}`);
+      setBulkMessage(`تم اعتماد ${updated.length} نقطة في ${bulkDistrict}، ${bulkCity} وإسنادها إلى ${bulkAssignedTo}.${skipped ? ` تم تجاوز ${skipped} نقطة لم تعد بحالة Pending.` : ''}`);
     } catch (validationError) {
       setBulkMessage(`تعذر اعتماد النقاط: ${validationError.message}`);
     }
@@ -1656,11 +1678,15 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = 
       </section>
 
       {canValidateAll && <section className="records" style={{ padding: 20, marginBottom: 16 }}>
-        <div className="recordsHeader"><div><h2>Validate all pending points</h2><span>Approve every pending pole and assign it to one technician.</span></div><Target size={20} /></div>
+        <div className="recordsHeader"><div><h2>Validate an area</h2><span>Choose a city and district to validate only its pending poles.</span></div><Target size={20} /></div>
         <div className="bulkValidatePanel" style={{ marginTop: 14, marginBottom: 0 }}>
-          <div><strong>{pending} pending points</strong><span>{pending ? 'All pending poles will be validated and assigned together.' : 'There are no pending points to validate.'}</span></div>
-          <label>Assign all to<select value={bulkAssignedTo} onChange={(event) => setBulkAssignedTo(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>
-          <button className="save" type="button" onClick={validateAllPending} disabled={busy || !pending || !bulkAssignedTo}>Validate all {pending}</button>
+          <div><strong>{selectedPendingRows.length} pending points in selected area</strong><span>{pending ? 'Only pending poles in the selected city and district will be validated.' : 'There are no pending points to validate.'}</span></div>
+          <div className="fieldGrid">
+            <label>City<select value={bulkCity} onChange={(event) => { setBulkCity(event.target.value); setBulkDistrict(''); }}><option value="">Choose city...</option>{pendingCities.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+            <label>District<select value={bulkDistrict} onChange={(event) => setBulkDistrict(event.target.value)} disabled={!bulkCity}><option value="">Choose district...</option>{pendingDistricts.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+            <label>Assign to technician<select value={bulkAssignedTo} onChange={(event) => setBulkAssignedTo(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>
+          </div>
+          <button className="save" type="button" onClick={validateAllPending} disabled={busy || !selectedPendingRows.length || !bulkCity || !bulkDistrict || !bulkAssignedTo}>Validate area ({selectedPendingRows.length})</button>
         </div>
         {bulkMessage && <div className="notice" style={{ marginTop: 12 }}>{bulkMessage}</div>}
       </section>}
@@ -2776,17 +2802,19 @@ function App() {
     }
   }
 
-  async function validateAllPendingPlannedPoles(ids, technician) {
+  async function validateAreaPendingPlannedPoles(ids, city, district, technician) {
     if (!supabase) throw new Error('إعدادات Supabase غير موجودة.');
     if (profile?.role !== 'design' || String(profile.username || '').trim().toLowerCase() !== 'ryadh') {
       throw new Error('Not authorized');
     }
-    if (!ids.length) return [];
+    if (!ids.length || !city || !district) return [];
 
     setBusy(true);
     try {
-      const { data, error } = await supabase.rpc('engineer_validate_pending_poles', {
+      const { data, error } = await supabase.rpc('design_validate_area_pending_poles', {
         p_ids: ids,
+        p_city: city,
+        p_district: district,
         p_technician: technician,
       });
       if (error) throw error;
@@ -3232,7 +3260,7 @@ function App() {
   }
 
   if (profile.role === 'design') {
-    return <DesignWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} plantingRows={records.column_checks} technicians={technicianOptions} onUpload={uploadPlannedPoints} onDeleteBatch={deletePlannedBatch} onValidateAll={validateAllPendingPlannedPoles} onRefresh={loadAll} onLogout={changeProfile} busy={busy} />;
+    return <DesignWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} plantingRows={records.column_checks} technicians={technicianOptions} onUpload={uploadPlannedPoints} onDeleteBatch={deletePlannedBatch} onValidateAll={validateAreaPendingPlannedPoles} onRefresh={loadAll} onLogout={changeProfile} busy={busy} />;
   }
 
   if (profile.role === 'engineer') {
