@@ -2580,8 +2580,20 @@ function App() {
         await manageUsers('list');
       }
     } catch (error) {
-      const details = error?.context?.error || error.message || 'تعذر تنفيذ العملية.';
-      setUsersError(typeof details === 'string' ? details : 'تعذر تنفيذ العملية.');
+      let details = error?.context?.error;
+      if (!details && typeof error?.context?.clone === 'function') {
+        try {
+          const body = await error.context.clone().json();
+          details = body?.error || body?.message;
+        } catch {
+          details = '';
+        }
+      }
+      details = String(details || error.message || 'تعذر تنفيذ العملية.');
+      if (/already been registered|already exists|email_exists/i.test(details)) {
+        details = 'اسم المستخدم موجود مسبقًا. اختَر اسمًا مختلفًا.';
+      }
+      setUsersError(details);
       throw error;
     } finally {
       setUsersBusy(false);
