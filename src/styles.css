@@ -1575,6 +1575,22 @@ button:disabled {
   font-size: 12px;
 }
 
+.mapDirectionsLink {
+  align-items: center;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  color: #1d4ed8;
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  justify-content: center;
+  margin-top: 5px;
+  min-height: 38px;
+  padding: 0 10px;
+  text-decoration: none;
+}
+
 .moveLocationButton {
   align-items: center;
   display: inline-flex;

@@ -1773,7 +1773,7 @@ function engineerPointIcon(color, selected) {
   });
 }
 
-function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMapClick, onMovePoint, addMode = false, moveMode = false }) {
+function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMapClick, onMovePoint, addMode = false, moveMode = false, showDirectionsLink = false }) {
   const first = rows.find((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)));
   const firstPathPoint = paths.flatMap((path) => path.coordinates || [])[0];
   const firstAssetPoint = assets.flatMap((asset) => flattenMapCoordinates(asset.coordinates))[0];
@@ -1792,6 +1792,8 @@ function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMa
       {rows.map((row) => {
         const statusColor = row.validation_status === 'validated' ? '#2563eb' : row.validation_status === 'planted' ? '#16a34a' : row.validation_status === 'rejected' ? '#dc2626' : '#f59e0b';
         const selected = row.id === selectedId;
+        const destination = `${Number(row.latitude)},${Number(row.longitude)}`;
+        const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
         return <Marker
           key={row.id}
           position={[Number(row.latitude), Number(row.longitude)]}
@@ -1819,6 +1821,7 @@ function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMa
                 <span><b>Status:</b> {row.validation_status || '-'}</span>
                 <span><b>Assign to:</b> {row.assigned_to || '-'}</span>
                 <span dir="ltr"><b>Coordinates:</b> {row.latitude}, {row.longitude}</span>
+                {showDirectionsLink && <a className="mapDirectionsLink" href={directionsUrl} target="_blank" rel="noreferrer">فتح الاتجاهات في Google Maps</a>}
               </div>
             </Popup>}
         </Marker>;
@@ -2143,7 +2146,7 @@ function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], planned
       </button>}
       {isTechnician && workflowMode === 'legacy' ? <LegacyTechnicianWorkspace assignments={legacyAssignments} records={legacyRecords} onAdd={onLegacyAdd} onSwitchMode={() => setWorkflowMode('validated')} busy={busy} /> : <>
       <section className="workspace">
-      <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} paths={isTechnician ? [] : plannedRoutes} assets={isTechnician ? [] : plannedAssets} selectedId={selectedId} onSelect={(id) => { if (pointsForPlanting.some((row) => row.id === id)) setSelectedId(id); }} onMapClick={() => {}} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
+      <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} paths={isTechnician ? [] : plannedRoutes} assets={isTechnician ? [] : plannedAssets} selectedId={selectedId} onSelect={(id) => { if (pointsForPlanting.some((row) => row.id === id)) setSelectedId(id); }} onMapClick={() => {}} showDirectionsLink={isTechnician} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
       <section id="supervisor-controls" className={`records panel supervisorControls ${controlsOpen ? 'open' : ''}`} style={{ padding: 20 }}>
         {isTechnician && <div className="mobileWorkflowTabs"><button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => switchWorkflowMode('validated')}>Assigned validated points</button><button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => switchWorkflowMode('legacy')}>Legacy areas</button></div>}
         <div className="recordsHeader"><div><h2>Validated planting points</h2><span>Only engineer-approved points are shown.</span></div></div>
