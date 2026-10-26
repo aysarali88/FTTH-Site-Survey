@@ -1154,8 +1154,9 @@ function ImportedDesignAssets({ assets = [] }) {
   });
 }
 
-function MapFitToContent({ rows = [], paths = [], assets = [] }) {
+function MapFitToContent({ rows = [], paths = [], assets = [], fitOnce = false }) {
   const map = useMap();
+  const hasFitted = useRef(false);
   const signature = useMemo(
     () => JSON.stringify({
       rows: rows.map((row) => [row.latitude, row.longitude]),
@@ -1166,16 +1167,21 @@ function MapFitToContent({ rows = [], paths = [], assets = [] }) {
   );
 
   useEffect(() => {
+    if (fitOnce && hasFitted.current) return;
     const points = rows
       .map((row) => [Number(row.latitude), Number(row.longitude)])
       .filter(([latitude, longitude]) => Number.isFinite(latitude) && Number.isFinite(longitude));
     const routePoints = paths.flatMap((path) => path.coordinates || []);
     const assetPoints = assets.flatMap((asset) => flattenMapCoordinates(asset.coordinates));
     const allPoints = [...points, ...routePoints, ...assetPoints];
-    if (allPoints.length < 2) return;
+    if (!allPoints.length) return;
     const bounds = L.latLngBounds(allPoints);
-    if (bounds.isValid()) map.fitBounds(bounds.pad(0.12), { maxZoom: 18, animate: false });
-  }, [map, signature]);
+    if (bounds.isValid()) {
+      if (allPoints.length > 1) map.fitBounds(bounds.pad(0.12), { maxZoom: 18, animate: false });
+      else map.setView(allPoints[0], map.getZoom(), { animate: false });
+      if (fitOnce) hasFitted.current = true;
+    }
+  }, [map, signature, fitOnce]);
 
   return null;
 }
@@ -1773,7 +1779,7 @@ function engineerPointIcon(color, selected) {
   });
 }
 
-function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMapClick, onMovePoint, addMode = false, moveMode = false, showDirectionsLink = false }) {
+function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMapClick, onMovePoint, addMode = false, moveMode = false, showDirectionsLink = false, fitOnlyInitially = false }) {
   const first = rows.find((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)));
   const firstPathPoint = paths.flatMap((path) => path.coordinates || [])[0];
   const firstAssetPoint = assets.flatMap((asset) => flattenMapCoordinates(asset.coordinates))[0];
@@ -1785,7 +1791,7 @@ function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMa
       <MapLayers />
       <CurrentLocationControl />
       <MapFullscreenControl />
-      <MapFitToContent rows={rows} paths={paths} assets={assets} />
+      <MapFitToContent rows={rows} paths={paths} assets={assets} fitOnce={fitOnlyInitially} />
       <EngineerMapClickHandler enabled={addMode} onMapClick={onMapClick} />
       <ImportedDesignAssets assets={assets} />
       <CablePaths paths={paths} />
@@ -1940,7 +1946,7 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
         <Menu size={24} />
       </button>
       <section className="workspace">
-         <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} paths={plannedRoutes} assets={plannedAssets} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} onMovePoint={handleMovePoint} addMode={addMode} moveMode={moveMode} />{addMode && <div className="mapAddHint">Click on the map to place a new point</div>}{moveMode && <><button className="mapMoveFinishButton" type="button" onClick={() => setMoveMode(false)}>Finish editing location</button><div className="mapMoveHint">Drag the selected point to the correct location.</div></>}<div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div></div>
+         <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} paths={plannedRoutes} assets={plannedAssets} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} onMovePoint={handleMovePoint} addMode={addMode} moveMode={moveMode} fitOnlyInitially />{addMode && <div className="mapAddHint">Click on the map to place a new point</div>}{moveMode && <><button className="mapMoveFinishButton" type="button" onClick={() => setMoveMode(false)}>Finish editing location</button><div className="mapMoveHint">Drag the selected point to the correct location.</div></>}<div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div></div>
         <section id="engineer-controls" className={`panel engineerControls ${controlsOpen ? 'open' : ''}`}>
           <div className="panelHeader"><div><p>Engineer review</p><h2>Validation queue</h2><span className="autoId">{plannedRows.length} planned points</span></div><Target color="#2563eb" /></div>
           {selected && <><div className="pointDetails"><div><span>Point</span><strong>{selected.point_name || selected.id}</strong></div><div><span>Area / City</span><strong>{selected.city || '-'}</strong></div><div><span>District</span><strong>{selected.district || '-'}</strong></div><div><span>Status</span><strong>{selected.validation_status || '-'}</strong></div></div><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><button className={`ghost moveLocationButton${moveMode ? ' active' : ''}`} type="button" onClick={toggleMoveMode} disabled={busy}><MapPin size={17} />{moveMode ? 'Finish editing location' : 'Edit location'}</button>{moveMode && <div className="moveLocationHint">Drag the selected point to the correct location.</div>}<label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label>{status === 'validated' && <label>Assign technician<select value={assignedTo} onChange={(event) => rememberTechnician(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>}<label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy || (status === 'validated' && !assignedTo)}>Save decision</button><button className="dangerMini engineerDeleteButton" type="button" onClick={deleteSelected} disabled={busy || selected.validation_status === 'planted'}><Trash2 size={17} /> Delete point</button></>}
