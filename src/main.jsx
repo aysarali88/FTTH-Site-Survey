@@ -1660,8 +1660,8 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = 
 
   async function validateAllPending() {
     if (!canValidateAll || !selectedPendingRows.length || !bulkCity || !bulkDistrict) return;
-    if (!bulkAssignedTo) {
-      setBulkMessage('اختر الفني الذي ستُسند إليه النقاط.');
+    if (!technicians.some((technician) => technician.username === bulkAssignedTo)) {
+      setBulkMessage('اختر فنيًا لديه حساب نشط.');
       return;
     }
     const count = selectedPendingRows.length;
@@ -1706,9 +1706,9 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = 
           <div className="fieldGrid">
             <label>City<select value={bulkCity} onChange={(event) => { setBulkCity(event.target.value); setBulkDistrict(''); }}><option value="">Choose city...</option>{pendingCities.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
             <label>District<select value={bulkDistrict} onChange={(event) => setBulkDistrict(event.target.value)} disabled={!bulkCity}><option value="">Choose district...</option>{pendingDistricts.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
-            <label>Assign to technician<select value={bulkAssignedTo} onChange={(event) => setBulkAssignedTo(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>
+            <label>Assign to technician<select value={bulkAssignedTo} onChange={(event) => setBulkAssignedTo(event.target.value)}><option value="">{technicians.length ? 'Select technician...' : 'No active technician accounts'}</option>{technicians.map((technician) => <option key={technician.username} value={technician.username}>{technician.display_name || technician.username}</option>)}</select></label>
           </div>
-          <button className="save" type="button" onClick={validateAllPending} disabled={busy || !selectedPendingRows.length || !bulkCity || !bulkDistrict || !bulkAssignedTo}>Validate area ({selectedPendingRows.length})</button>
+          <button className="save" type="button" onClick={validateAllPending} disabled={busy || !selectedPendingRows.length || !bulkCity || !bulkDistrict || !technicians.some((technician) => technician.username === bulkAssignedTo)}>Validate area ({selectedPendingRows.length})</button>
         </div>
         {bulkMessage && <div className="notice" style={{ marginTop: 12 }}>{bulkMessage}</div>}
       </section>}
@@ -1865,8 +1865,10 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
     setMoveMode(false);
     setStatus(selected?.validation_status === 'rejected' ? 'rejected' : 'validated');
     setNotes(selected?.validation_notes || '');
-    setAssignedTo(selected?.assigned_to || rememberedAssignedTo || '');
-  }, [selectedId, selected?.validation_status, selected?.validation_notes, selected?.assigned_to]);
+    const validTechnician = [selected?.assigned_to, rememberedAssignedTo]
+      .find((username) => technicians.some((technician) => technician.username === username));
+    setAssignedTo(validTechnician || '');
+  }, [selectedId, selected?.validation_status, selected?.validation_notes, selected?.assigned_to, rememberedAssignedTo, technicians]);
 
   function rememberTechnician(value) {
     setAssignedTo(value);
@@ -1880,6 +1882,10 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
 
   async function saveSelected() {
     if (!selected) return;
+    if (status === 'validated' && !technicians.some((technician) => technician.username === assignedTo)) {
+      setMessage('اختر فنيًا لديه حساب نشط.');
+      return;
+    }
     setMessage('');
     try {
       await onValidate(selected, { status, notes, assignedTo });
@@ -1949,7 +1955,7 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
          <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} paths={plannedRoutes} assets={plannedAssets} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} onMovePoint={handleMovePoint} addMode={addMode} moveMode={moveMode} fitOnlyInitially />{addMode && <div className="mapAddHint">Click on the map to place a new point</div>}{moveMode && <><button className="mapMoveFinishButton" type="button" onClick={() => setMoveMode(false)}>Finish editing location</button><div className="mapMoveHint">Drag the selected point to the correct location.</div></>}<div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div></div>
         <section id="engineer-controls" className={`panel engineerControls ${controlsOpen ? 'open' : ''}`}>
           <div className="panelHeader"><div><p>Engineer review</p><h2>Validation queue</h2><span className="autoId">{plannedRows.length} planned points</span></div><Target color="#2563eb" /></div>
-          {selected && <><div className="pointDetails"><div><span>Point</span><strong>{selected.point_name || selected.id}</strong></div><div><span>Area / City</span><strong>{selected.city || '-'}</strong></div><div><span>District</span><strong>{selected.district || '-'}</strong></div><div><span>Status</span><strong>{selected.validation_status || '-'}</strong></div></div><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><button className={`ghost moveLocationButton${moveMode ? ' active' : ''}`} type="button" onClick={toggleMoveMode} disabled={busy}><MapPin size={17} />{moveMode ? 'Finish editing location' : 'Edit location'}</button>{moveMode && <div className="moveLocationHint">Drag the selected point to the correct location.</div>}<label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label>{status === 'validated' && <label>Assign technician<select value={assignedTo} onChange={(event) => rememberTechnician(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>}<label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy || (status === 'validated' && !assignedTo)}>Save decision</button><button className="dangerMini engineerDeleteButton" type="button" onClick={deleteSelected} disabled={busy || selected.validation_status === 'planted'}><Trash2 size={17} /> Delete point</button></>}
+          {selected && <><div className="pointDetails"><div><span>Point</span><strong>{selected.point_name || selected.id}</strong></div><div><span>Area / City</span><strong>{selected.city || '-'}</strong></div><div><span>District</span><strong>{selected.district || '-'}</strong></div><div><span>Status</span><strong>{selected.validation_status || '-'}</strong></div></div><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><button className={`ghost moveLocationButton${moveMode ? ' active' : ''}`} type="button" onClick={toggleMoveMode} disabled={busy}><MapPin size={17} />{moveMode ? 'Finish editing location' : 'Edit location'}</button>{moveMode && <div className="moveLocationHint">Drag the selected point to the correct location.</div>}<label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label>{status === 'validated' && <label>Assign technician<select value={assignedTo} onChange={(event) => rememberTechnician(event.target.value)}><option value="">{technicians.length ? 'Select technician...' : 'No active technician accounts'}</option>{technicians.map((technician) => <option key={technician.username} value={technician.username}>{technician.display_name || technician.username}</option>)}</select></label>}<label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy || (status === 'validated' && !technicians.some((technician) => technician.username === assignedTo))}>Save decision</button><button className="dangerMini engineerDeleteButton" type="button" onClick={deleteSelected} disabled={busy || selected.validation_status === 'planted'}><Trash2 size={17} /> Delete point</button></>}
           {addMode && <div className="fieldGrid" style={{ marginBottom: 14 }}><label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label><label>District<input value={district} onChange={(event) => setDistrict(event.target.value)} /></label></div>}
           <button className="ghost" type="button" style={{ width: '100%', marginTop: 12 }} onClick={() => { setMoveMode(false); setAddMode((value) => !value); }}>{addMode ? 'Cancel add point' : 'Add point on map'}</button>
         </section>
@@ -2184,11 +2190,11 @@ function WorkflowQueue({ plannedRows, technicians, onAssign, onRefresh, busy }) 
   }, [readyRows, selected]);
 
   useEffect(() => {
-    setAssignedTo(selected?.assigned_to || '');
-  }, [selectedId, selected?.assigned_to]);
+    setAssignedTo(technicians.some((technician) => technician.username === selected?.assigned_to) ? selected.assigned_to : '');
+  }, [selectedId, selected?.assigned_to, technicians]);
 
   async function assign() {
-    if (!selected || !assignedTo || selected.validation_status !== 'validated') return;
+    if (!selected || !technicians.some((technician) => technician.username === assignedTo) || selected.validation_status !== 'validated') return;
     await onAssign(selected.id, assignedTo);
   }
 
@@ -2197,8 +2203,8 @@ function WorkflowQueue({ plannedRows, technicians, onAssign, onRefresh, busy }) 
       <div className="recordsHeader"><div><h2>Validation & assignment</h2><span>اعتماد النقاط ثم إرسالها للفني</span></div><button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={17} /> Refresh</button></div>
       <div className="fieldGrid workflowControls">
         <label>Validated point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{readyRows.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} · {row.city || '-'} · {row.district || '-'}</option>)}</select></label>
-        <label>Technician<select value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)}><option value="">Select technician...</option>{technicians.map((technician) => <option key={technician} value={technician}>{technician}</option>)}</select></label>
-        <button className="save" type="button" onClick={assign} disabled={busy || !selected || !assignedTo || selected.validation_status !== 'validated'}>Send to technician</button>
+        <label>Technician<select value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)}><option value="">{technicians.length ? 'Select technician...' : 'No active technician accounts'}</option>{technicians.map((technician) => <option key={technician.username} value={technician.username}>{technician.display_name || technician.username}</option>)}</select></label>
+        <button className="save" type="button" onClick={assign} disabled={busy || !selected || !technicians.some((technician) => technician.username === assignedTo) || selected.validation_status !== 'validated'}>Send to technician</button>
       </div>
       <div className="tableWrap"><table><thead><tr><th>ID</th><th>City</th><th>District</th><th>Status</th><th>Assigned to</th></tr></thead><tbody>{readyRows.slice(0, 200).map((row) => <tr key={row.id} onClick={() => setSelectedId(row.id)}><td>{row.id}</td><td>{row.city || '-'}</td><td>{row.district || '-'}</td><td>{row.validation_status}</td><td>{row.assigned_to || '-'}</td></tr>)}{!readyRows.length && <tr><td colSpan="5" className="empty">No validated points yet.</td></tr>}</tbody></table></div>
     </section>
@@ -2292,7 +2298,7 @@ function App() {
   const [managementActivity, setManagementActivity] = useState([]);
   const [activityAvailable, setActivityAvailable] = useState(null);
   const [managedUsers, setManagedUsers] = useState([]);
-  const [technicianUsers, setTechnicianUsers] = useState([]);
+  const [technicianAccounts, setTechnicianAccounts] = useState([]);
   const [usersBusy, setUsersBusy] = useState(false);
   const [usersError, setUsersError] = useState('');
   const [onlineUsers, setOnlineUsers] = useState(null);
@@ -2371,13 +2377,7 @@ function App() {
     };
   }, [records]);
 
-  const technicianOptions = useMemo(
-    () => [...new Set([
-      ...technicianUsers,
-      ...Object.values(records).flat().map((row) => row.tech_name).filter(Boolean),
-    ])].sort(),
-    [records, technicianUsers],
-  );
+  const technicianOptions = technicianAccounts;
 
   useEffect(() => {
     if (profile) {
@@ -2740,14 +2740,14 @@ function App() {
       if (['design', 'engineer'].includes(profile?.role) || (profile?.role === 'admin' && profile?.username)) {
         const { data: users, error: usersError } = await supabase
           .from('user_profiles')
-          .select('username, role, active')
+          .select('username, display_name, role, active')
           .eq('role', 'tech')
           .eq('active', true)
           .order('username', { ascending: true });
         if (usersError) throw usersError;
-        setTechnicianUsers((users || []).map((user) => user.username).filter(Boolean));
+        setTechnicianAccounts((users || []).filter((user) => user.username));
       } else {
-        setTechnicianUsers([]);
+        setTechnicianAccounts([]);
       }
       const districtResult = canonicalizeDistricts(nextRecords);
       if (!isManagement) {
