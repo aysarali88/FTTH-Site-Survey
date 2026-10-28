@@ -2205,7 +2205,7 @@ function WorkflowQueue({ plannedRows, technicians, onAssign, onRefresh, busy }) 
   );
 }
 
-function UserManagement({ users, loading, error, onRefresh, onCreate, onToggle, legacyAssignments = [], onAssignLegacy, onRemoveLegacy }) {
+function UserManagement({ users, loading, error, currentUsername, onRefresh, onCreate, onDelete, onToggle, legacyAssignments = [], onAssignLegacy, onRemoveLegacy }) {
   const [form, setForm] = useState({
     username: '',
     displayName: '',
@@ -2252,7 +2252,7 @@ function UserManagement({ users, loading, error, onRefresh, onCreate, onToggle, 
         <button className="save" type="submit" disabled={loading}>Create user</button>
       </form>
       <div className="tableWrap userTableWrap"><table><thead><tr><th>Username</th><th>Display name</th><th>Role</th><th>City</th><th>District</th><th>Status</th><th>Action</th></tr></thead><tbody>
-        {users.map((user) => <tr key={user.id}><td>{user.username}</td><td>{user.display_name || '-'}</td><td>{roleLabel(user.role)}</td><td>{user.city || '-'}</td><td>{user.district || '-'}</td><td><span className={`statusPill ${user.active ? 'statusGood' : 'statusBad'}`}>{user.active ? 'Active' : 'Disabled'}</span></td><td><button className="ghost compactButton" type="button" onClick={() => onToggle(user)} disabled={loading}>{user.active ? 'Disable' : 'Enable'}</button></td></tr>)}
+        {users.map((user) => <tr key={user.id}><td>{user.username}</td><td>{user.display_name || '-'}</td><td>{roleLabel(user.role)}</td><td>{user.city || '-'}</td><td>{user.district || '-'}</td><td><span className={`statusPill ${user.active ? 'statusGood' : 'statusBad'}`}>{user.active ? 'Active' : 'Disabled'}</span></td><td><div className="userRowActions"><button className="ghost compactButton" type="button" onClick={() => onToggle(user)} disabled={loading}>{user.active ? 'Disable' : 'Enable'}</button><button className="dangerMini compactButton" type="button" onClick={() => { if (window.confirm(`Delete ${user.display_name || user.username}? Existing survey records will remain. Reassign open points first.`)) onDelete(user); }} disabled={loading || user.username === currentUsername}>Delete</button></div></td></tr>)}
         {!users.length && <tr><td colSpan="7" className="empty">No managed users yet.</td></tr>}
       </tbody></table></div>
       <form className="userCreateForm legacyAssignmentForm" onSubmit={submitLegacyAssignment}>
@@ -2586,6 +2586,9 @@ function App() {
         await manageUsers('list');
       } else if (action === 'toggle') {
         setMessage('تم تحديث صلاحية المستخدم.');
+        await manageUsers('list');
+      } else if (action === 'delete') {
+        setMessage('تم حذف المستخدم، مع الاحتفاظ بسجلاته السابقة.');
         await manageUsers('list');
       }
     } catch (error) {
@@ -3506,11 +3509,13 @@ function App() {
       {isAdmin && adminPage === 'users' && (
         <UserManagement
           users={managedUsers}
+          currentUsername={profile?.username}
           legacyAssignments={legacyAssignments}
           loading={usersBusy}
           error={usersError || (!supabase ? 'إعدادات Supabase غير موجودة.' : '')}
           onRefresh={() => manageUsers('list').catch(() => {})}
           onCreate={(user) => manageUsers('create', { user })}
+          onDelete={(user) => manageUsers('delete', { id: user.id }).catch(() => {})}
           onToggle={(user) => manageUsers('toggle', { id: user.id, active: !user.active })}
           onAssignLegacy={assignLegacyArea}
           onRemoveLegacy={removeLegacyArea}

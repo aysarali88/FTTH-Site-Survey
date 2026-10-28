@@ -83,8 +83,78 @@ Deno.serve(async (request) => {
       return response({ ok: true });
     }
 
+    if (action === 'delete') {
+      const userId = String(body.id || '');
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+        return response({ error: 'A valid user id is required.' }, 400);
+      }
+      if (userId === authData.user.id) return response({ error: 'You cannot delete your own account.' }, 400);
+
+      const { data: target, error: targetError } = await adminClient
+        .from('user_profiles')
+        .select('id, username, role, active')
+        .eq('id', userId)
+        .maybeSingle();
+      if (targetError) throw targetError;
+      if (!target) return response({ error: 'User not found.' }, 404);
+
+      if (target.role === 'admin' && target.active) {
+        const { data: activeAdmins, error: adminsError } = await adminClient
+          .from('user_profiles')
+          .select('id')
+          .eq('role', 'admin')
+          .eq('active', true);
+        if (adminsError) throw adminsError;
+        if ((activeAdmins || []).length <= 1) {
+          return response({ error: 'You cannot delete the last active admin account.' }, 409);
+        }
+      }
+
+      const { data: assignedPoint, error: assignmentError } = await adminClient
+        .from('planned_poles')
+        .select('id')
+        .eq('assigned_to', target.username)
+        .eq('validation_status', 'validated')
+        .limit(1)
+        .maybeSingle();
+      if (assignmentError) throw assignmentError;
+      if (assignedPoint) {
+        return response({ error: 'Reassign this user’s validated points before deleting the account.' }, 409);
+      }
+
+      const { data: legacyAssignments, error: legacyReadError } = await adminClient
+        .from('legacy_area_assignments')
+        .select('*')
+        .eq('technician_username', target.username);
+      if (legacyReadError) throw legacyReadError;
+      if (legacyAssignments?.length) {
+        const { error: legacyDeleteError } = await adminClient
+          .from('legacy_area_assignments')
+          .delete()
+          .eq('technician_username', target.username);
+        if (legacyDeleteError) throw legacyDeleteError;
+      }
+
+      const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
+      if (deleteError) {
+        if (legacyAssignments?.length) {
+          const { error: restoreError } = await adminClient
+            .from('legacy_area_assignments')
+            .upsert(legacyAssignments, { onConflict: 'id' });
+          if (restoreError) console.error('Could not restore Legacy assignments after failed user deletion:', restoreError);
+        }
+        throw deleteError;
+      }
+
+      return response({ ok: true, deletedUsername: target.username });
+    }
+
     return response({ error: 'Unsupported action.' }, 400);
   } catch (error) {
-    return response({ error: error instanceof Error ? error.message : 'Unexpected error.' }, 400);
+    const message = error instanceof Error ? error.message : 'Unexpected error.';
+    if (/storage|owned.*object|object.*owner/i.test(message)) {
+      return response({ error: 'This account owns uploaded files. Transfer or remove those files before deleting the user.' }, 409);
+    }
+    return response({ error: message }, 400);
   }
 });

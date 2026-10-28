@@ -1363,6 +1363,13 @@ button:disabled {
   padding: 7px 10px;
 }
 
+.userRowActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .workspace {
   display: grid;
   gap: 16px;
