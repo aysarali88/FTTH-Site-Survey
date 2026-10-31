@@ -1037,6 +1037,13 @@ function MapLayers() {
   );
 }
 
+function engineerWorkAreaKey(item) {
+  const city = String(item.city || '').trim().toLocaleLowerCase();
+  const district = String(item.district || '').trim().toLocaleLowerCase();
+  if (city || district) return `area:${city}|${district}`;
+  return item.batch_id ? `batch:${item.batch_id}` : 'unassigned';
+}
+
 function KmlMapLabel({ text, style = {} }) {
   const scale = Number(style.scale);
   if (!text) return null;
@@ -1154,7 +1161,46 @@ function ImportedDesignAssets({ assets = [] }) {
   });
 }
 
-function MapFitToContent({ rows = [], paths = [], assets = [], fitOnce = false }) {
+function readSavedMapViewport(storageKey) {
+  if (!storageKey) return null;
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+    const latitude = Number(saved?.center?.[0]);
+    const longitude = Number(saved?.center?.[1]);
+    const zoom = Number(saved?.zoom);
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) return null;
+    if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) return null;
+    if (!Number.isFinite(zoom) || zoom < 0 || zoom > 22) return null;
+    return { center: [latitude, longitude], zoom };
+  } catch {
+    return null;
+  }
+}
+
+function MapViewportPersistence({ storageKey }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!storageKey) return undefined;
+    const saveViewport = () => {
+      const center = map.getCenter();
+      try {
+        sessionStorage.setItem(storageKey, JSON.stringify({
+          center: [center.lat, center.lng],
+          zoom: map.getZoom(),
+        }));
+      } catch {
+        // The map remains usable if session storage is unavailable.
+      }
+    };
+    map.on('moveend zoomend', saveViewport);
+    return () => map.off('moveend zoomend', saveViewport);
+  }, [map, storageKey]);
+
+  return null;
+}
+
+function MapFitToContent({ rows = [], paths = [], assets = [], fitOnce = false, skipFit = false }) {
   const map = useMap();
   const hasFitted = useRef(false);
   const signature = useMemo(
@@ -1167,6 +1213,10 @@ function MapFitToContent({ rows = [], paths = [], assets = [], fitOnce = false }
   );
 
   useEffect(() => {
+    if (skipFit) {
+      hasFitted.current = true;
+      return;
+    }
     if (fitOnce && hasFitted.current) return;
     const points = rows
       .map((row) => [Number(row.latitude), Number(row.longitude)])
@@ -1181,7 +1231,7 @@ function MapFitToContent({ rows = [], paths = [], assets = [], fitOnce = false }
       else map.setView(allPoints[0], map.getZoom(), { animate: false });
       if (fitOnce) hasFitted.current = true;
     }
-  }, [map, signature, fitOnce]);
+  }, [map, signature, fitOnce, skipFit]);
 
   return null;
 }
@@ -1779,19 +1829,21 @@ function engineerPointIcon(color, selected) {
   });
 }
 
-function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMapClick, onMovePoint, addMode = false, moveMode = false, showDirectionsLink = false, fitOnlyInitially = false }) {
+function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMapClick, onMovePoint, addMode = false, moveMode = false, showDirectionsLink = false, fitOnlyInitially = false, viewportKey = '' }) {
+  const [savedViewport] = useState(() => readSavedMapViewport(viewportKey));
   const first = rows.find((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)));
   const firstPathPoint = paths.flatMap((path) => path.coordinates || [])[0];
   const firstAssetPoint = assets.flatMap((asset) => flattenMapCoordinates(asset.coordinates))[0];
-  const center = first
+  const center = savedViewport?.center || (first
     ? [Number(first.latitude), Number(first.longitude)]
-    : firstPathPoint || firstAssetPoint || [defaultLocation.latitude, defaultLocation.longitude];
+    : firstPathPoint || firstAssetPoint || [defaultLocation.latitude, defaultLocation.longitude]);
   return (
-    <MapContainer center={center} zoom={14} maxZoom={22} scrollWheelZoom className="map" zoomControl rotate touchRotate rotateControl={{ closeOnZeroBearing: false, position: 'topright' }} bearing={0}>
+    <MapContainer center={center} zoom={savedViewport?.zoom ?? 14} maxZoom={22} scrollWheelZoom className="map" zoomControl rotate touchRotate rotateControl={{ closeOnZeroBearing: false, position: 'topright' }} bearing={0}>
       <MapLayers />
       <CurrentLocationControl />
       <MapFullscreenControl />
-      <MapFitToContent rows={rows} paths={paths} assets={assets} fitOnce={fitOnlyInitially} />
+      <MapFitToContent rows={rows} paths={paths} assets={assets} fitOnce={fitOnlyInitially} skipFit={Boolean(savedViewport)} />
+      <MapViewportPersistence storageKey={viewportKey} />
       <EngineerMapClickHandler enabled={addMode} onMapClick={onMapClick} />
       <ImportedDesignAssets assets={assets} />
       <CablePaths paths={paths} />
@@ -1837,7 +1889,14 @@ function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMa
 }
 
 function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = [], technicians, onRefresh, onLogout, onValidate, onMove, onDelete, onAdd, busy }) {
-  const [selectedId, setSelectedId] = useState(plannedRows[0]?.id || '');
+  const [selectedId, setSelectedId] = useState('');
+  const [selectedAreaKey, setSelectedAreaKey] = useState(() => {
+    try {
+      return localStorage.getItem(`engineer-selected-area:${profile.username || profile.techName}`) || '';
+    } catch {
+      return '';
+    }
+  });
   const [status, setStatus] = useState('validated');
   const [rememberedAssignedTo, setRememberedAssignedTo] = useState(() => {
     try {
@@ -1848,18 +1907,71 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
   });
   const [assignedTo, setAssignedTo] = useState('');
   const [notes, setNotes] = useState('');
-  const [city, setCity] = useState(profile.city || 'Misrata');
-  const [district, setDistrict] = useState(profile.district || '');
   const [addMode, setAddMode] = useState(false);
   const [moveMode, setMoveMode] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
   const [message, setMessage] = useState('');
-  const selected = plannedRows.find((row) => row.id === selectedId) || null;
-  const pending = plannedRows.filter((row) => row.validation_status === 'pending' && !row.deleted_at);
+  const workAreas = useMemo(() => {
+    const areas = new Map();
+    const addItems = (items, type) => items.forEach((item) => {
+      const key = engineerWorkAreaKey(item);
+      const area = areas.get(key) || {
+        key,
+        city: String(item.city || '').trim(),
+        district: String(item.district || '').trim(),
+        poles: 0,
+        routes: 0,
+        features: 0,
+        latest: '',
+      };
+      if (type === 'pole') area.poles += 1;
+      if (type === 'route') area.routes += 1;
+      if (type === 'feature') area.features += 1;
+      if (item.created_at && item.created_at > area.latest) area.latest = item.created_at;
+      areas.set(key, area);
+    });
+    addItems(plannedRows, 'pole');
+    addItems(plannedRoutes, 'route');
+    addItems(plannedAssets, 'feature');
+    return [...areas.values()].sort((a, b) => b.latest.localeCompare(a.latest) || a.city.localeCompare(b.city) || a.district.localeCompare(b.district));
+  }, [plannedRows, plannedRoutes, plannedAssets]);
+  const selectedArea = workAreas.find((area) => area.key === selectedAreaKey) || workAreas[0] || null;
+  const areaRows = useMemo(
+    () => selectedArea ? plannedRows.filter((row) => engineerWorkAreaKey(row) === selectedArea.key) : [],
+    [plannedRows, selectedArea?.key],
+  );
+  const areaRoutes = useMemo(
+    () => selectedArea ? plannedRoutes.filter((route) => engineerWorkAreaKey(route) === selectedArea.key) : [],
+    [plannedRoutes, selectedArea?.key],
+  );
+  const areaAssets = useMemo(
+    () => selectedArea ? plannedAssets.filter((asset) => engineerWorkAreaKey(asset) === selectedArea.key) : [],
+    [plannedAssets, selectedArea?.key],
+  );
+  const selected = areaRows.find((row) => row.id === selectedId) || null;
+  const pending = areaRows.filter((row) => row.validation_status === 'pending' && !row.deleted_at);
+  const canAddToArea = Boolean(selectedArea?.city || selectedArea?.district);
 
   useEffect(() => {
-    if (!selected && plannedRows[0]) setSelectedId(plannedRows[0].id);
-  }, [plannedRows, selected]);
+    if (!selectedArea) return;
+    setSelectedAreaKey((current) => current === selectedArea.key ? current : selectedArea.key);
+    try {
+      localStorage.setItem(`engineer-selected-area:${profile.username || profile.techName}`, selectedArea.key);
+    } catch {
+      // The selected area can remain a per-page preference when storage is unavailable.
+    }
+  }, [selectedArea?.key, profile.username, profile.techName]);
+
+  useEffect(() => {
+    setSelectedId(areaRows[0]?.id || '');
+    setAddMode(false);
+    setMoveMode(false);
+    setMessage('');
+  }, [selectedArea?.key]);
+
+  useEffect(() => {
+    if (!selected && areaRows[0]) setSelectedId(areaRows[0].id);
+  }, [areaRows, selected]);
 
   useEffect(() => {
     setMoveMode(false);
@@ -1897,9 +2009,9 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
   }
 
   async function handleMapClick(latlng) {
-    if (!addMode) return;
+    if (!addMode || !canAddToArea) return;
     try {
-      const created = await onAdd({ latitude: latlng.lat, longitude: latlng.lng, city, district });
+      const created = await onAdd({ latitude: latlng.lat, longitude: latlng.lng, city: selectedArea.city, district: selectedArea.district });
       setSelectedId(created.id);
       setAddMode(false);
       setMessage('تمت إضافة نقطة جديدة بحالة Pending.');
@@ -1945,19 +2057,32 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
   return (
     <main className="app adminMode">
       <header className="topbar"><div><p className="eyebrow">Site Survey Pro</p><h1>Engineer Validation</h1></div><div className="actions"><div className="profilePill"><UserRound size={17} /><span>{profile.techName}</span><strong>Engineer</strong></div><button className="ghost" type="button" onClick={onLogout}><LogOut size={18} /> Logout</button><button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={18} /> Refresh</button></div></header>
-      <section className="stats"><article><Target size={19} /><span>Pending</span><strong>{pending.length}</strong></article><article><CheckCircle2 size={19} /><span>Validated</span><strong>{plannedRows.filter((row) => row.validation_status === 'validated').length}</strong></article><article><X size={19} /><span>Rejected</span><strong>{plannedRows.filter((row) => row.validation_status === 'rejected').length}</strong></article></section>
+      <section className="stats"><article><Target size={19} /><span>Pending in area</span><strong>{pending.length}</strong></article><article><CheckCircle2 size={19} /><span>Validated in area</span><strong>{areaRows.filter((row) => row.validation_status === 'validated').length}</strong></article><article><X size={19} /><span>Rejected in area</span><strong>{areaRows.filter((row) => row.validation_status === 'rejected').length}</strong></article></section>
       {message && <div className="notice">{message}</div>}
       <button className="mobileLogoutButton" type="button" onClick={onLogout}><LogOut size={18} /><span>تسجيل الخروج</span></button>
       <button className="engineerPanelToggle" type="button" onClick={() => setControlsOpen((value) => !value)} aria-expanded={controlsOpen} aria-controls="engineer-controls" aria-label={controlsOpen ? 'إخفاء لوحة المهندس' : 'إظهار لوحة المهندس'}>
         <Menu size={24} />
       </button>
       <section className="workspace">
-         <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={plannedRows} paths={plannedRoutes} assets={plannedAssets} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} onMovePoint={handleMovePoint} addMode={addMode} moveMode={moveMode} fitOnlyInitially />{addMode && <div className="mapAddHint">Click on the map to place a new point</div>}{moveMode && <><button className="mapMoveFinishButton" type="button" onClick={() => setMoveMode(false)}>Finish editing location</button><div className="mapMoveHint">Drag the selected point to the correct location.</div></>}<div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div></div>
+         <div className="mapShell engineerMapShell" style={{ minHeight: 650 }}>
+           <div className="engineerAreaSelector">
+             <label htmlFor="engineer-work-area">Work area</label>
+             <select id="engineer-work-area" value={selectedArea?.key || ''} onChange={(event) => { setSelectedAreaKey(event.target.value); setSelectedId(''); setAddMode(false); setMoveMode(false); setControlsOpen(false); }} disabled={!workAreas.length}>
+               {!workAreas.length && <option value="">No work areas available</option>}
+               {workAreas.map((area) => <option key={area.key} value={area.key}>{area.district || 'Unspecified district'} · {area.city || 'Unknown city'} ({area.poles} poles)</option>)}
+             </select>
+             {selectedArea && <span>{areaRows.length} poles · {areaRoutes.length} cable routes · {areaAssets.length} design features</span>}
+           </div>
+           {selectedArea ? <EngineerMap key={selectedArea.key} rows={areaRows} paths={areaRoutes} assets={areaAssets} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} onMovePoint={handleMovePoint} addMode={addMode} moveMode={moveMode} fitOnlyInitially viewportKey={`engineer-map-viewport:${profile.username || profile.techName}:${selectedArea.key}`} /> : <div className="engineerNoAreas">No uploaded areas are available to work on.</div>}
+           {addMode && <div className="mapAddHint">Click on the map to place a new point</div>}
+           {moveMode && <><button className="mapMoveFinishButton" type="button" onClick={() => setMoveMode(false)}>Finish editing location</button><div className="mapMoveHint">Drag the selected point to the correct location.</div></>}
+           <div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div>
+         </div>
         <section id="engineer-controls" className={`panel engineerControls ${controlsOpen ? 'open' : ''}`}>
-          <div className="panelHeader"><div><p>Engineer review</p><h2>Validation queue</h2><span className="autoId">{plannedRows.length} planned points</span></div><Target color="#2563eb" /></div>
+          <div className="panelHeader"><div><p>Engineer review</p><h2>Validation queue</h2><span className="autoId">{areaRows.length} points in selected area</span></div><Target color="#2563eb" /></div>
           {selected && <><div className="pointDetails"><div><span>Point</span><strong>{selected.point_name || selected.id}</strong></div><div><span>Area / City</span><strong>{selected.city || '-'}</strong></div><div><span>District</span><strong>{selected.district || '-'}</strong></div><div><span>Status</span><strong>{selected.validation_status || '-'}</strong></div></div><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><button className={`ghost moveLocationButton${moveMode ? ' active' : ''}`} type="button" onClick={toggleMoveMode} disabled={busy}><MapPin size={17} />{moveMode ? 'Finish editing location' : 'Edit location'}</button>{moveMode && <div className="moveLocationHint">Drag the selected point to the correct location.</div>}<label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label>{status === 'validated' && <label>Assign technician<select value={assignedTo} onChange={(event) => rememberTechnician(event.target.value)}><option value="">{technicians.length ? 'Select technician...' : 'No active technician accounts'}</option>{technicians.map((technician) => <option key={technician.username} value={technician.username}>{technician.display_name || technician.username}</option>)}</select></label>}<label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy || (status === 'validated' && !technicians.some((technician) => technician.username === assignedTo))}>Save decision</button><button className="dangerMini engineerDeleteButton" type="button" onClick={deleteSelected} disabled={busy || selected.validation_status === 'planted'}><Trash2 size={17} /> Delete point</button></>}
-          {addMode && <div className="fieldGrid" style={{ marginBottom: 14 }}><label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label><label>District<input value={district} onChange={(event) => setDistrict(event.target.value)} /></label></div>}
-          <button className="ghost" type="button" style={{ width: '100%', marginTop: 12 }} onClick={() => { setMoveMode(false); setAddMode((value) => !value); }}>{addMode ? 'Cancel add point' : 'Add point on map'}</button>
+          {addMode && selectedArea && <div className="engineerAddTarget"><MapPinned size={16} /> New point will be added to {selectedArea.district || 'Unspecified district'} · {selectedArea.city || 'Unknown city'}</div>}
+          <button className="ghost" type="button" style={{ width: '100%', marginTop: 12 }} onClick={() => { setMoveMode(false); setAddMode((value) => !value); }} disabled={!canAddToArea}>{addMode ? 'Cancel add point' : 'Add point on map'}</button>
         </section>
       </section>
     </main>

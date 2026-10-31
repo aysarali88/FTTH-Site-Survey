@@ -1390,6 +1390,72 @@ button:disabled {
   position: relative;
 }
 
+.engineerAreaSelector {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+  display: grid;
+  gap: 5px;
+  left: 50%;
+  max-width: 460px;
+  padding: 9px 12px;
+  position: absolute;
+  top: 12px;
+  transform: translateX(-50%);
+  width: calc(100% - 150px);
+  z-index: 550;
+}
+
+.engineerAreaSelector label {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.engineerAreaSelector select {
+  background: #f8fafc;
+  border: 1px solid #dbe4ef;
+  border-radius: 6px;
+  color: #0f172a;
+  font-weight: 800;
+  min-height: 38px;
+  padding: 7px 10px;
+  width: 100%;
+}
+
+.engineerAreaSelector > span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.engineerNoAreas {
+  align-items: center;
+  background: #f8fafc;
+  color: #64748b;
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  min-height: 640px;
+  padding: 24px;
+  text-align: center;
+}
+
+.engineerAddTarget {
+  align-items: center;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  color: #1e40af;
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 10px;
+}
+
 .mapAddButton {
   background: #0f172a;
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.22);
@@ -2773,6 +2839,29 @@ td {
     top: 0;
     width: 100vw;
     z-index: 1;
+  }
+
+  .engineerAreaSelector {
+    left: 60px;
+    max-width: none;
+    right: 70px;
+    top: 12px;
+    transform: none;
+    width: auto;
+  }
+
+  .engineerAreaSelector label,
+  .engineerAreaSelector > span {
+    display: none;
+  }
+
+  .engineerAreaSelector select {
+    min-height: 42px;
+  }
+
+  .engineerNoAreas {
+    height: 100dvh;
+    min-height: 100dvh;
   }
 
   .map {
