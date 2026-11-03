@@ -2215,7 +2215,7 @@ function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, 
   );
 }
 
-function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], plannedAssets = [], legacyAssignments = [], legacyRecords = [], onRefresh, onLogout, onPlant, onLegacyAdd, busy }) {
+function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], plannedAssets = [], legacyAssignments = [], legacyRecords = [], onRefresh, onLogout, onPlant, onLegacyAdd, onSwitchToSurvey, busy }) {
   const isTechnician = profile.role === 'tech';
   const available = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status) && (profile.role === 'supervisor' || row.assigned_to === profile.username || row.assigned_to === profile.techName));
   const pointsForPlanting = isTechnician ? available.filter((row) => row.validation_status === 'validated') : available;
@@ -2276,7 +2276,8 @@ function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], planned
       <header className="topbar"><div><p className="eyebrow">Site Survey Pro</p><h1>{isTechnician ? 'Technician Planting' : 'Supervisor Planting'}</h1></div><div className="actions"><div className="profilePill"><UserRound size={17} /><span>{profile.techName}</span><strong>{isTechnician ? 'Technician' : 'Supervisor'}</strong></div><button className="ghost" type="button" onClick={onLogout}><LogOut size={18} /> Logout</button><button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={18} /> Refresh</button></div></header>
       <section className="stats"><article><CheckCircle2 size={19} /><span>Validated points</span><strong>{available.filter((row) => row.validation_status === 'validated').length}</strong></article><article><MapPin size={19} /><span>Planted</span><strong>{available.filter((row) => row.validation_status === 'planted').length}</strong></article><article><Camera size={19} /><span>Photos</span><strong>{available.filter((row) => row.is_planted && row.photo_url).length}</strong></article></section>
       {message && <div className="notice">{message}</div>}
-      {isTechnician && <div className="workflowModeTabs desktopWorkflowTabs"><button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => switchWorkflowMode('validated')}>Assigned validated points</button><button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => switchWorkflowMode('legacy')}>Legacy areas</button></div>}
+      {isTechnician && <div className="workflowModeTabs desktopWorkflowTabs"><button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => switchWorkflowMode('validated')}>Assigned validated points</button><button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => switchWorkflowMode('legacy')}>Legacy areas</button><button type="button" onClick={onSwitchToSurvey}>Survey</button></div>}
+      {isTechnician && <button className="ghost techModeButtonMobile" type="button" onClick={onSwitchToSurvey}>Survey: Buildings &amp; Poles</button>}
       <button className="mobileLogoutButton" type="button" onClick={onLogout}><LogOut size={18} /><span>تسجيل الخروج</span></button>
       {workflowMode === 'validated' && <button className="engineerPanelToggle" type="button" onClick={() => setControlsOpen((value) => !value)} aria-expanded={controlsOpen} aria-controls="supervisor-controls" aria-label={controlsOpen ? 'إخفاء لوحة الفني' : 'إظهار لوحة الفني'}>
         <Menu size={24} />
@@ -2285,7 +2286,7 @@ function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], planned
       <section className="workspace">
       <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} paths={isTechnician ? [] : plannedRoutes} assets={isTechnician ? [] : plannedAssets} selectedId={selectedId} onSelect={(id) => { if (pointsForPlanting.some((row) => row.id === id)) setSelectedId(id); }} onMapClick={() => {}} showDirectionsLink={isTechnician} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
       <section id="supervisor-controls" className={`records panel supervisorControls ${controlsOpen ? 'open' : ''}`} style={{ padding: 20 }}>
-        {isTechnician && <div className="mobileWorkflowTabs"><button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => switchWorkflowMode('validated')}>Assigned validated points</button><button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => switchWorkflowMode('legacy')}>Legacy areas</button></div>}
+        {isTechnician && <div className="mobileWorkflowTabs"><button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => switchWorkflowMode('validated')}>Assigned validated points</button><button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => switchWorkflowMode('legacy')}>Legacy areas</button><button type="button" onClick={onSwitchToSurvey}>Survey: Buildings &amp; Poles</button></div>}
         <div className="recordsHeader"><div><h2>Validated planting points</h2><span>Only engineer-approved points are shown.</span></div></div>
         <label style={{ marginTop: 14 }}>Point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{pointsForPlanting.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} - {row.validation_status}</option>)}</select></label>
         {selected && <>
@@ -2406,6 +2407,7 @@ function UserManagement({ users, loading, error, currentUsername, onRefresh, onC
 
 function App() {
   const [profile, setProfile] = useState(readSavedProfile);
+  const [techWorkspaceMode, setTechWorkspaceMode] = useState('planting');
   const [active, setActive] = useState(() => (readSavedProfile()?.role === 'tech' ? 'column_checks' : 'buildings'));
   const [forms, setForms] = useState(() => makeEmptyForms(readSavedProfile()));
   const [records, setRecords] = useState({ buildings: [], poles: [], column_checks: [] });
@@ -2436,6 +2438,8 @@ function App() {
   const isManagement = profile?.role === 'management';
   const isAdminView = isAdmin || isManagement;
   const isTechnician = profile?.role === 'tech';
+  const isAccountTechnician = isTechnician && Boolean(profile?.username);
+  const isTechSurveyMode = isTechnician && techWorkspaceMode === 'survey';
   const isStaffRole = profile?.role === 'design';
   const current = resources[active];
   const form = forms[active];
@@ -2447,6 +2451,16 @@ function App() {
         .map((row) => normalizeRow(row, type))
         .filter((row) => {
           if (isStaffRole && !isManagement) return true;
+          if (isTechSurveyMode) {
+            const hasAssignedArea = Boolean(profile?.city && profile?.district);
+            if (!hasAssignedArea) {
+              return row.tech_name === profile?.techName
+                && row.district === profile?.district
+                && (!profile?.city || districtKey(inferCity(row)) === districtKey(profile.city));
+            }
+            return districtKey(row.district) === districtKey(profile.district)
+              && districtKey(inferCity(row)) === districtKey(profile.city);
+          }
           if (!isAdminView) return row.tech_name === profile?.techName && row.district === profile?.district;
           if (adminFilters.type !== 'all' && adminFilters.type !== type) return false;
           if (adminFilters.district && row.district !== adminFilters.district) return false;
@@ -2456,7 +2470,7 @@ function App() {
         });
     }
     return filtered;
-  }, [records, isAdminView, isManagement, isStaffRole, profile, adminFilters, query]);
+  }, [records, isAdminView, isManagement, isStaffRole, isTechnician, isTechSurveyMode, profile, adminFilters, query]);
 
   const currentRows = scopedRecords[active] || [];
   const displayedRows = currentRows.slice(0, MAX_TABLE_ROWS);
@@ -2469,17 +2483,21 @@ function App() {
     let remaining = MAX_MAP_MARKERS;
     return Object.fromEntries(
       Object.entries(scopedRecords).map(([type, rows]) => {
+        if (isTechSurveyMode && !['buildings', 'poles'].includes(type)) return [type, []];
         const limitedRows = rows.slice(0, Math.max(remaining, 0));
         remaining -= limitedRows.length;
         return [type, limitedRows];
       }),
     );
-  }, [scopedRecords]);
+  }, [scopedRecords, isTechSurveyMode]);
   const mapMarkerCount = useMemo(
     () => Object.values(mapRecords).reduce((sum, rows) => sum + rows.length, 0),
     [mapRecords],
   );
-  const hiddenMapMarkers = Math.max(allVisibleRows.length - mapMarkerCount, 0);
+  const mapSourceCount = isTechSurveyMode
+    ? scopedRecords.buildings.length + scopedRecords.poles.length
+    : allVisibleRows.length;
+  const hiddenMapMarkers = Math.max(mapSourceCount - mapMarkerCount, 0);
   const visiblePhotos = useMemo(
     () => allVisibleRows.filter((row) => row.photo_url),
     [allVisibleRows],
@@ -2651,6 +2669,7 @@ function App() {
       setProfile(nextProfile);
       setForms(makeEmptyForms(nextProfile));
       setActive('column_checks');
+      setTechWorkspaceMode('planting');
       setMessage('تم تسجيل دخول الفني.');
       return;
     }
@@ -2687,6 +2706,7 @@ function App() {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(nextProfile));
     setProfile(nextProfile);
     setForms(makeEmptyForms(nextProfile));
+    setTechWorkspaceMode('planting');
     setMessage(`تم الدخول بصلاحية ${roleLabel(nextProfile.role)}.`);
   }
 
@@ -2695,6 +2715,7 @@ function App() {
     localStorage.removeItem(PROFILE_KEY);
     setProfile(null);
     setActive('buildings');
+    setTechWorkspaceMode('planting');
     setMessage('');
   }
 
@@ -3476,6 +3497,22 @@ function App() {
     downloadTextFile(kml, `site-survey-${formatDate(new Date())}.kml`, 'application/vnd.google-earth.kml+xml;charset=utf-8');
   }
 
+  function enterTechnicianSurvey() {
+    setTechWorkspaceMode('survey');
+    setActive('buildings');
+    setPhotoFile(null);
+    setFormDrawerOpen(true);
+    setMessage('');
+  }
+
+  function enterTechnicianPlanting() {
+    setTechWorkspaceMode('planting');
+    if (isTechnician && !profile?.username) setActive('column_checks');
+    setFormDrawerOpen(false);
+    setPhotoFile(null);
+    setMessage('');
+  }
+
   if (!profile) {
     return <LoginPage onSave={saveProfile} />;
   }
@@ -3492,8 +3529,8 @@ function App() {
     return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} legacyRecords={records.column_checks} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} busy={busy} />;
   }
 
-  if (profile.role === 'tech' && profile.username) {
-    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} legacyAssignments={legacyAssignments} legacyRecords={records.column_checks} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} onLegacyAdd={addLegacyPlanting} busy={busy} />;
+  if (profile.role === 'tech' && profile.username && techWorkspaceMode === 'planting') {
+    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} legacyAssignments={legacyAssignments} legacyRecords={records.column_checks} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} onLegacyAdd={addLegacyPlanting} onSwitchToSurvey={enterTechnicianSurvey} busy={busy} />;
   }
 
   return (
@@ -3539,13 +3576,16 @@ function App() {
               <RefreshCcw size={18} />
               Refresh
             </button>
+            {isTechnician && <button className="ghost" type="button" onClick={isTechSurveyMode ? enterTechnicianPlanting : enterTechnicianSurvey}>{isTechSurveyMode ? 'Pole planting' : 'Building & Pole Survey'}</button>}
           </div>
         )}
         <div className="topbarHeading">
           <p className="eyebrow">Site Survey Pro</p>
-          <h1>{isAdminView ? 'Dashboard' : 'خريطة الرفع الميداني'}</h1>
+          <h1>{isAdminView ? 'Dashboard' : isTechSurveyMode ? 'Building & Pole Survey' : 'خريطة الرفع الميداني'}</h1>
         </div>
       </header>
+
+      {isTechnician && <button className="ghost techModeButtonMobile" type="button" onClick={isTechSurveyMode ? enterTechnicianPlanting : enterTechnicianSurvey}>{isTechSurveyMode ? 'Pole planting' : 'Building & Pole Survey'}</button>}
 
       {isAdmin && <div className="onlineSessionsWrap" ref={onlineUsersRef}>
         <button
@@ -3575,7 +3615,7 @@ function App() {
         </div>}
       </div>}
 
-      {(!isAdminView || adminPage === 'data') && <section className="stats">
+      {(!isAdminView || adminPage === 'data') && <section className={`stats${isTechSurveyMode ? ' techSurveyStats' : ''}`}>
         <article>
           <ClipboardList size={19} />
           <span>Buildings</span>
@@ -3586,11 +3626,11 @@ function App() {
           <span>Poles</span>
           <strong>{totals.poles}</strong>
         </article>
-        <article>
+        {!isTechSurveyMode && <article>
           <CheckCircle2 size={19} />
           <span>Pole Planting</span>
           <strong>{totals.column_checks}</strong>
-        </article>
+        </article>}
       </section>}
 
       {isAdminView && (
@@ -3680,7 +3720,7 @@ function App() {
       {isAdmin && adminPage === 'data' && <WorkflowQueue plannedRows={plannedRows} technicians={technicianOptions} onAssign={assignPlannedPole} onRefresh={loadAll} busy={busy} />}
 
       {(!isAdminView || (isAdmin && adminPage === 'data')) && <nav className="tabs" aria-label="Survey sections">
-        {(isTechnician ? Object.entries(resources).filter(([key]) => key === 'column_checks') : Object.entries(resources)).map(([key, item]) => (
+        {(isTechSurveyMode ? Object.entries(resources).filter(([key]) => ['buildings', 'poles'].includes(key)) : isTechnician ? Object.entries(resources).filter(([key]) => key === 'column_checks') : Object.entries(resources)).map(([key, item]) => (
           <button
             key={key}
             type="button"
@@ -3742,7 +3782,7 @@ function App() {
 
         {!isManagement && <form className={`panel ${formDrawerOpen ? 'open' : ''}`} onSubmit={saveRecord}>
           <div className="drawerTabs" aria-label="Choose record type">
-            {Object.entries(resources).map(([key, item]) => (
+            {(isTechSurveyMode ? Object.entries(resources).filter(([key]) => ['buildings', 'poles'].includes(key)) : isTechnician ? Object.entries(resources).filter(([key]) => key === 'column_checks') : Object.entries(resources)).map(([key, item]) => (
               <button
                 key={key}
                 type="button"
