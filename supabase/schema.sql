@@ -495,6 +495,7 @@ create table if not exists public.buildings (
   record_status text,
   notes text,
   photo_url text,
+  created_by uuid references auth.users (id) default auth.uid(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -514,6 +515,7 @@ create table if not exists public.poles (
   record_status text,
   notes text,
   photo_url text,
+  created_by uuid references auth.users (id) default auth.uid(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -532,6 +534,7 @@ create table if not exists public.column_checks (
   form_version smallint not null default 1,
   notes text,
   photo_url text,
+  created_by uuid references auth.users (id) default auth.uid(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -554,6 +557,10 @@ add column if not exists tech_name text;
 alter table public.column_checks
   add column if not exists planting_reason text,
   add column if not exists form_version smallint;
+
+alter table public.buildings add column if not exists created_by uuid references auth.users (id) default auth.uid();
+alter table public.poles add column if not exists created_by uuid references auth.users (id) default auth.uid();
+alter table public.column_checks add column if not exists created_by uuid references auth.users (id) default auth.uid();
 
 update public.column_checks set form_version = 1 where form_version is null;
 
@@ -664,6 +671,38 @@ create trigger column_checks_set_updated_at
 before update on public.column_checks
 for each row execute function public.set_updated_at();
 
+create or replace function public.assign_survey_record_creator()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    new.created_by := (select auth.uid());
+  else
+    new.created_by := old.created_by;
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.assign_survey_record_creator() from public, anon, authenticated;
+
+drop trigger if exists assign_buildings_record_creator on public.buildings;
+create trigger assign_buildings_record_creator
+before insert or update on public.buildings
+for each row execute function public.assign_survey_record_creator();
+
+drop trigger if exists assign_poles_record_creator on public.poles;
+create trigger assign_poles_record_creator
+before insert or update on public.poles
+for each row execute function public.assign_survey_record_creator();
+
+drop trigger if exists assign_column_checks_record_creator on public.column_checks;
+create trigger assign_column_checks_record_creator
+before insert or update on public.column_checks
+for each row execute function public.assign_survey_record_creator();
+
 alter table public.buildings enable row level security;
 alter table public.poles enable row level security;
 alter table public.column_checks enable row level security;
@@ -687,9 +726,10 @@ for update using (
 );
 
 drop policy if exists "public delete buildings" on public.buildings;
-create policy "public delete buildings" on public.buildings
-for delete using (
-  not public.is_management_user()
+create policy "admins and record owners delete buildings" on public.buildings
+for delete to authenticated using (
+  public.current_app_role() = 'admin'
+  or (public.current_app_role() = 'tech' and created_by = (select auth.uid()))
 );
 
 drop policy if exists "public read poles" on public.poles;
@@ -711,9 +751,10 @@ for update using (
 );
 
 drop policy if exists "public delete poles" on public.poles;
-create policy "public delete poles" on public.poles
-for delete using (
-  not public.is_management_user()
+create policy "admins and record owners delete poles" on public.poles
+for delete to authenticated using (
+  public.current_app_role() = 'admin'
+  or (public.current_app_role() = 'tech' and created_by = (select auth.uid()))
 );
 
 drop policy if exists "public read column checks" on public.column_checks;
@@ -735,9 +776,10 @@ for update using (
 );
 
 drop policy if exists "public delete column checks" on public.column_checks;
-create policy "public delete column checks" on public.column_checks
-for delete using (
-  not public.is_management_user()
+create policy "admins and record owners delete column checks" on public.column_checks
+for delete to authenticated using (
+  public.current_app_role() = 'admin'
+  or (public.current_app_role() = 'tech' and created_by = (select auth.uid()))
 );
 
 grant select, insert, update, delete on public.buildings to anon;

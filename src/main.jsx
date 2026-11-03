@@ -1261,8 +1261,9 @@ function SurveyMarkers({ groupedRecords, onDelete, canDelete }) {
   );
 }
 
-function FastSurveyMarkers({ groupedRecords, onDelete, canDelete }) {
+function FastSurveyMarkers({ groupedRecords, onDelete, canDelete, canDeleteOwnedRecord, busy = false }) {
   function renderPopup(type, row) {
+    const showDelete = canDelete || canDeleteOwnedRecord?.(type, row);
     return (
       <Popup>
         <div className="markerPopup">
@@ -1279,9 +1280,9 @@ function FastSurveyMarkers({ groupedRecords, onDelete, canDelete }) {
                 فتح الصورة
               </a>
             )}
-          {canDelete && (
-            <button type="button" className="dangerMini" onClick={() => onDelete(type, row.id)}>
-              Delete point
+          {showDelete && (
+            <button type="button" className="dangerMini" disabled={busy} onClick={() => onDelete(type, row.id)}>
+              حذف السجل
             </button>
           )}
         </div>
@@ -1418,7 +1419,7 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = 
               <MapLayers />
               <CurrentLocationControl />
               <MapFullscreenControl />
-          <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} onDelete={onDelete} canDelete={!readOnly} />
+          <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} onDelete={onDelete} canDelete={!readOnly} busy={busy} />
             </MapContainer>
           </div>
         </article>
@@ -1829,7 +1830,7 @@ function engineerPointIcon(color, selected) {
   });
 }
 
-function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMapClick, onMovePoint, addMode = false, moveMode = false, showDirectionsLink = false, fitOnlyInitially = false, viewportKey = '' }) {
+function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMapClick, onMovePoint, onDeletePlantingRecord, canDeletePlantedRecord, busy = false, addMode = false, moveMode = false, showDirectionsLink = false, fitOnlyInitially = false, viewportKey = '' }) {
   const [savedViewport] = useState(() => readSavedMapViewport(viewportKey));
   const first = rows.find((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)));
   const firstPathPoint = paths.flatMap((path) => path.coordinates || [])[0];
@@ -1880,6 +1881,7 @@ function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMa
                 <span><b>Assign to:</b> {row.assigned_to || '-'}</span>
                 <span dir="ltr"><b>Coordinates:</b> {row.latitude}, {row.longitude}</span>
                 {showDirectionsLink && <a className="mapDirectionsLink" href={directionsUrl} target="_blank" rel="noreferrer">فتح الاتجاهات في Google Maps</a>}
+                {row.validation_status === 'planted' && row.planted_record_id && canDeletePlantedRecord?.(row) && <button className="dangerMini" type="button" disabled={busy} onClick={() => onDeletePlantingRecord?.(row)}>{busy ? 'جارٍ الحذف...' : 'حذف سجل الزراعة'}</button>}
               </div>
             </Popup>}
         </Marker>;
@@ -2089,7 +2091,7 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
   );
 }
 
-function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, onSwitchToSurvey, busy }) {
+function LegacyTechnicianWorkspace({ assignments, records, onAdd, onDeleteRecord, onSwitchMode, onSwitchToSurvey, profile, busy }) {
   const activeAssignments = (assignments || []).filter((assignment) => assignment.active !== false);
   const [selectedAreaId, setSelectedAreaId] = useState(activeAssignments[0]?.id || '');
   const [location, setLocation] = useState(defaultLocation);
@@ -2184,7 +2186,12 @@ function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, 
           <MapCenterSync value={location} onChange={setLocation} />
           <MapFitToContent rows={mapRows} />
           <MapFullscreenControl />
-          <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} />
+          <FastSurveyMarkers
+            groupedRecords={{ column_checks: mapRows }}
+            onDelete={onDeleteRecord}
+            canDeleteOwnedRecord={(type, row) => type === 'column_checks' && Boolean(profile?.userId) && row.created_by === profile.userId}
+            busy={busy}
+          />
         </MapContainer>
         <div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div>
         <div className="limitBadge">حرّك الخريطة وضع الدبوس على موقع العمود</div>
@@ -2222,7 +2229,7 @@ function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, 
   );
 }
 
-function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], plannedAssets = [], legacyAssignments = [], legacyRecords = [], onRefresh, onLogout, onPlant, onLegacyAdd, onSwitchToSurvey, busy }) {
+function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], plannedAssets = [], legacyAssignments = [], legacyRecords = [], onRefresh, onLogout, onPlant, onLegacyAdd, onDeleteRecord, onSwitchToSurvey, busy }) {
   const isTechnician = profile.role === 'tech';
   const available = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status) && (profile.role === 'supervisor' || row.assigned_to === profile.username || row.assigned_to === profile.techName));
   const pointsForPlanting = isTechnician ? available.filter((row) => row.validation_status === 'validated') : available;
@@ -2234,6 +2241,7 @@ function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], planned
   const [controlsOpen, setControlsOpen] = useState(false);
   const [workflowMode, setWorkflowMode] = useState('validated');
   const selected = pointsForPlanting.find((row) => row.id === selectedId) || null;
+  const ownedPlantingRecordIds = new Set((legacyRecords || []).filter((row) => row.created_by && row.created_by === profile.userId).map((row) => row.id));
 
   useEffect(() => {
     if (!selected) setSelectedId(pointsForPlanting[0]?.id || '');
@@ -2288,9 +2296,9 @@ function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], planned
       {workflowMode === 'validated' && <button className="engineerPanelToggle" type="button" onClick={() => setControlsOpen((value) => !value)} aria-expanded={controlsOpen} aria-controls="supervisor-controls" aria-label={controlsOpen ? 'إخفاء لوحة الفني' : 'إظهار لوحة الفني'}>
         <Menu size={24} />
       </button>}
-      {isTechnician && workflowMode === 'legacy' ? <LegacyTechnicianWorkspace assignments={legacyAssignments} records={legacyRecords} onAdd={onLegacyAdd} onSwitchMode={() => setWorkflowMode('validated')} onSwitchToSurvey={onSwitchToSurvey} busy={busy} /> : <>
+      {isTechnician && workflowMode === 'legacy' ? <LegacyTechnicianWorkspace profile={profile} assignments={legacyAssignments} records={legacyRecords} onAdd={onLegacyAdd} onDeleteRecord={onDeleteRecord} onSwitchMode={() => setWorkflowMode('validated')} onSwitchToSurvey={onSwitchToSurvey} busy={busy} /> : <>
       <section className="workspace">
-      <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} paths={isTechnician ? [] : plannedRoutes} assets={isTechnician ? [] : plannedAssets} selectedId={selectedId} onSelect={(id) => { if (pointsForPlanting.some((row) => row.id === id)) setSelectedId(id); }} onMapClick={() => {}} showDirectionsLink={isTechnician} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
+      <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} paths={isTechnician ? [] : plannedRoutes} assets={isTechnician ? [] : plannedAssets} selectedId={selectedId} onSelect={(id) => { if (pointsForPlanting.some((row) => row.id === id)) setSelectedId(id); }} onMapClick={() => {}} onDeletePlantingRecord={(row) => onDeleteRecord?.('column_checks', row.planted_record_id)} canDeletePlantedRecord={(row) => isTechnician && ownedPlantingRecordIds.has(row.planted_record_id)} busy={busy} showDirectionsLink={isTechnician} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
       <section id="supervisor-controls" className={`records panel supervisorControls ${controlsOpen ? 'open' : ''}`} style={{ padding: 20 }}>
         {isTechnician && <div className="mobileWorkflowTabs">
           <button type="button" onClick={() => onSwitchToSurvey('buildings')}>البنايات</button>
@@ -2549,7 +2557,11 @@ function App() {
     let mounted = true;
     if (!supabase) return undefined;
     supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted || !data.session || profile) return;
+      if (!mounted || !data.session) return;
+      if (profile) {
+        if (!profile.userId) setProfile((currentProfile) => currentProfile ? { ...currentProfile, userId: data.session.user.id } : currentProfile);
+        return;
+      }
       const { data: account } = await supabase
         .from('user_profiles')
         .select('username, display_name, role, city, district, active')
@@ -2557,6 +2569,7 @@ function App() {
         .single();
       if (!mounted || !account?.active) return;
       const nextProfile = {
+        userId: data.session.user.id,
         username: account.username,
         techName: account.display_name || account.username,
         city: account.city || '',
@@ -2708,6 +2721,7 @@ function App() {
     }
 
     const nextProfile = {
+      userId: data.user.id,
       username: account.username,
       techName: account.display_name || account.username,
       city: account.city || '',
@@ -3287,7 +3301,7 @@ function App() {
     }
     setBusy(true);
     try {
-      const recordId = form.id || makeRecordId(active);
+      const recordId = makeRecordId(active);
       const photoUrl = active === 'column_checks' && form.is_planted !== 'نعم' ? null : await uploadPhoto(recordId);
       const payload = {
         ...form,
@@ -3315,7 +3329,7 @@ function App() {
       });
       if ('pole_length' in payload) payload.pole_length = payload.pole_length === '' ? null : Number(payload.pole_length);
 
-      const { data, error } = await supabase.from(current.table).upsert(payload, { onConflict: 'id' }).select('*').single();
+      const { data, error } = await supabase.from(current.table).insert(payload).select('*').single();
       if (error) throw error;
 
       mergeSavedRecord(active, data || { ...payload, created_at: new Date().toISOString() });
@@ -3345,7 +3359,13 @@ function App() {
       setMessage('حساب Management للقراءة فقط.');
       return;
     }
-    const confirmed = window.confirm('هل تريد حذف هذه النقطة من السيستم؟');
+    const selectedRecord = records[type]?.find((row) => row.id === id);
+    if (!isAdmin && (!isTechnician || !profile?.userId || selectedRecord?.created_by !== profile.userId)) {
+      setMessage('يمكنك حذف السجلات التي أنشأتها فقط.');
+      return;
+    }
+    const deleteLabel = type === 'column_checks' ? 'سجل الزراعة' : getResourceUiSingular(type);
+    const confirmed = window.confirm(`هل تريد حذف ${deleteLabel}؟${type === 'column_checks' ? ' ستعود النقطة المعتمدة إلى قائمة انتظار الزراعة.' : ''}`);
     if (!confirmed) return;
 
     setBusy(true);
@@ -3356,7 +3376,12 @@ function App() {
         ...previous,
         [type]: previous[type].filter((row) => row.id !== id),
       }));
-      setMessage('تم حذف النقطة بنجاح.');
+      if (type === 'column_checks') {
+        setPlannedRows((previous) => previous.map((row) => row.planted_record_id === id
+          ? { ...row, validation_status: 'validated', is_planted: false, planted_record_id: null }
+          : row));
+      }
+      setMessage('تم حذف السجل بنجاح.');
     } catch (error) {
       setMessage(`تعذر الحذف: ${error.message}`);
     } finally {
@@ -3541,7 +3566,7 @@ function App() {
   }
 
   if (profile.role === 'tech' && profile.username && techWorkspaceMode === 'planting') {
-    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} legacyAssignments={legacyAssignments} legacyRecords={records.column_checks} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} onLegacyAdd={addLegacyPlanting} onSwitchToSurvey={enterTechnicianSurvey} busy={busy} />;
+    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} legacyAssignments={legacyAssignments} legacyRecords={records.column_checks} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} onLegacyAdd={addLegacyPlanting} onDeleteRecord={deleteRecord} onSwitchToSurvey={enterTechnicianSurvey} busy={busy} />;
   }
 
   return (
@@ -3776,7 +3801,13 @@ function App() {
             <CurrentLocationControl onLocated={(next) => { setLocation(next); setMessage('تم تحديد موقعك الحالي.'); }} />
             <MapCenterSync value={form} onChange={setLocation} />
             <MapFullscreenControl />
-            <FastSurveyMarkers groupedRecords={mapRecords} onDelete={deleteRecord} canDelete={isAdmin} />
+            <FastSurveyMarkers
+              groupedRecords={mapRecords}
+              onDelete={deleteRecord}
+              canDelete={isAdmin}
+              canDeleteOwnedRecord={(type, row) => isTechnician && isTechSurveyMode && Boolean(profile?.userId) && row.created_by === profile.userId}
+              busy={busy}
+            />
           </MapContainer>
           {hiddenMapMarkers > 0 && (
             <div className="limitBadge">
