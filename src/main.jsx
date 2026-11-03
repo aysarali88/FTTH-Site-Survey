@@ -2089,7 +2089,7 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
   );
 }
 
-function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, busy }) {
+function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, onSwitchToSurvey, busy }) {
   const activeAssignments = (assignments || []).filter((assignment) => assignment.active !== false);
   const [selectedAreaId, setSelectedAreaId] = useState(activeAssignments[0]?.id || '');
   const [location, setLocation] = useState(defaultLocation);
@@ -2194,7 +2194,14 @@ function LegacyTechnicianWorkspace({ assignments, records, onAdd, onSwitchMode, 
         <div className="recordsHeader">
           <div><h2>Legacy planting</h2><span>إضافة مباشرة للمناطق التي بدأ العمل فيها سابقًا</span></div>
         </div>
-        {onSwitchMode && <div className="mobileWorkflowTabs"><button type="button" onClick={onSwitchMode}>Assigned validated points</button></div>}
+        <div className="mobileWorkflowTabs">
+          {onSwitchToSurvey && <>
+            <button type="button" onClick={() => onSwitchToSurvey('buildings')}>البنايات</button>
+            <button type="button" onClick={() => onSwitchToSurvey('poles')}>الأعمدة</button>
+          </>}
+          {onSwitchMode && <button type="button" onClick={onSwitchMode}>زراعة الأعمدة</button>}
+          <button type="button" className="active" aria-current="page">زراعة المناطق القديمة</button>
+        </div>
         <label style={{ marginTop: 14 }}>Assigned area
           <select value={selectedArea?.id || ''} onChange={(event) => setSelectedAreaId(event.target.value)}>
             {activeAssignments.map((assignment) => <option key={assignment.id} value={assignment.id}>{assignment.city} · {assignment.district}</option>)}
@@ -2276,17 +2283,21 @@ function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], planned
       <header className="topbar"><div><p className="eyebrow">Site Survey Pro</p><h1>{isTechnician ? 'Technician Planting' : 'Supervisor Planting'}</h1></div><div className="actions"><div className="profilePill"><UserRound size={17} /><span>{profile.techName}</span><strong>{isTechnician ? 'Technician' : 'Supervisor'}</strong></div><button className="ghost" type="button" onClick={onLogout}><LogOut size={18} /> Logout</button><button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={18} /> Refresh</button></div></header>
       <section className="stats"><article><CheckCircle2 size={19} /><span>Validated points</span><strong>{available.filter((row) => row.validation_status === 'validated').length}</strong></article><article><MapPin size={19} /><span>Planted</span><strong>{available.filter((row) => row.validation_status === 'planted').length}</strong></article><article><Camera size={19} /><span>Photos</span><strong>{available.filter((row) => row.is_planted && row.photo_url).length}</strong></article></section>
       {message && <div className="notice">{message}</div>}
-      {isTechnician && <div className="workflowModeTabs desktopWorkflowTabs"><button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => switchWorkflowMode('validated')}>Assigned validated points</button><button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => switchWorkflowMode('legacy')}>Legacy areas</button><button type="button" onClick={onSwitchToSurvey}>Survey</button></div>}
-      {isTechnician && <button className="ghost techModeButtonMobile" type="button" onClick={onSwitchToSurvey}>Survey: Buildings &amp; Poles</button>}
+      {isTechnician && <div className="workflowModeTabs desktopWorkflowTabs"><button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => switchWorkflowMode('validated')}>زراعة الأعمدة</button><button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => switchWorkflowMode('legacy')}>زراعة المناطق القديمة</button><button type="button" onClick={() => onSwitchToSurvey('buildings')}>البنايات</button><button type="button" onClick={() => onSwitchToSurvey('poles')}>الأعمدة</button></div>}
       <button className="mobileLogoutButton" type="button" onClick={onLogout}><LogOut size={18} /><span>تسجيل الخروج</span></button>
       {workflowMode === 'validated' && <button className="engineerPanelToggle" type="button" onClick={() => setControlsOpen((value) => !value)} aria-expanded={controlsOpen} aria-controls="supervisor-controls" aria-label={controlsOpen ? 'إخفاء لوحة الفني' : 'إظهار لوحة الفني'}>
         <Menu size={24} />
       </button>}
-      {isTechnician && workflowMode === 'legacy' ? <LegacyTechnicianWorkspace assignments={legacyAssignments} records={legacyRecords} onAdd={onLegacyAdd} onSwitchMode={() => setWorkflowMode('validated')} busy={busy} /> : <>
+      {isTechnician && workflowMode === 'legacy' ? <LegacyTechnicianWorkspace assignments={legacyAssignments} records={legacyRecords} onAdd={onLegacyAdd} onSwitchMode={() => setWorkflowMode('validated')} onSwitchToSurvey={onSwitchToSurvey} busy={busy} /> : <>
       <section className="workspace">
       <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} paths={isTechnician ? [] : plannedRoutes} assets={isTechnician ? [] : plannedAssets} selectedId={selectedId} onSelect={(id) => { if (pointsForPlanting.some((row) => row.id === id)) setSelectedId(id); }} onMapClick={() => {}} showDirectionsLink={isTechnician} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
       <section id="supervisor-controls" className={`records panel supervisorControls ${controlsOpen ? 'open' : ''}`} style={{ padding: 20 }}>
-        {isTechnician && <div className="mobileWorkflowTabs"><button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => switchWorkflowMode('validated')}>Assigned validated points</button><button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => switchWorkflowMode('legacy')}>Legacy areas</button><button type="button" onClick={onSwitchToSurvey}>Survey: Buildings &amp; Poles</button></div>}
+        {isTechnician && <div className="mobileWorkflowTabs">
+          <button type="button" onClick={() => onSwitchToSurvey('buildings')}>البنايات</button>
+          <button type="button" onClick={() => onSwitchToSurvey('poles')}>الأعمدة</button>
+          <button type="button" className={workflowMode === 'validated' ? 'active' : ''} onClick={() => switchWorkflowMode('validated')}>زراعة الأعمدة</button>
+          <button type="button" className={workflowMode === 'legacy' ? 'active' : ''} onClick={() => switchWorkflowMode('legacy')}>زراعة المناطق القديمة</button>
+        </div>}
         <div className="recordsHeader"><div><h2>Validated planting points</h2><span>Only engineer-approved points are shown.</span></div></div>
         <label style={{ marginTop: 14 }}>Point<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select point...</option>{pointsForPlanting.map((row) => <option key={row.id} value={row.id}>{row.point_name || row.id} - {row.validation_status}</option>)}</select></label>
         {selected && <>
@@ -3497,9 +3508,9 @@ function App() {
     downloadTextFile(kml, `site-survey-${formatDate(new Date())}.kml`, 'application/vnd.google-earth.kml+xml;charset=utf-8');
   }
 
-  function enterTechnicianSurvey() {
+  function enterTechnicianSurvey(type = 'buildings') {
     setTechWorkspaceMode('survey');
-    setActive('buildings');
+    setActive(type === 'poles' ? 'poles' : 'buildings');
     setPhotoFile(null);
     setFormDrawerOpen(true);
     setMessage('');
@@ -3576,7 +3587,7 @@ function App() {
               <RefreshCcw size={18} />
               Refresh
             </button>
-            {isTechnician && <button className="ghost" type="button" onClick={isTechSurveyMode ? enterTechnicianPlanting : enterTechnicianSurvey}>{isTechSurveyMode ? 'Pole planting' : 'Building & Pole Survey'}</button>}
+            {isTechnician && <button className="ghost" type="button" onClick={isTechSurveyMode ? enterTechnicianPlanting : () => enterTechnicianSurvey()}>{isTechSurveyMode ? 'زراعة الأعمدة' : 'نماذج المسح'}</button>}
           </div>
         )}
         <div className="topbarHeading">
@@ -3585,7 +3596,7 @@ function App() {
         </div>
       </header>
 
-      {isTechnician && <button className="ghost techModeButtonMobile" type="button" onClick={isTechSurveyMode ? enterTechnicianPlanting : enterTechnicianSurvey}>{isTechSurveyMode ? 'Pole planting' : 'Building & Pole Survey'}</button>}
+      {isTechSurveyMode && <button className="engineerPanelToggle" type="button" onClick={() => setFormDrawerOpen((open) => !open)} aria-expanded={formDrawerOpen} aria-controls="tech-survey-form" aria-label={formDrawerOpen ? 'إخفاء قائمة نماذج المسح' : 'فتح قائمة نماذج المسح'}><Menu size={24} /></button>}
 
       {isAdmin && <div className="onlineSessionsWrap" ref={onlineUsersRef}>
         <button
@@ -3780,7 +3791,7 @@ function App() {
           </div>
         </div>
 
-        {!isManagement && <form className={`panel ${formDrawerOpen ? 'open' : ''}`} onSubmit={saveRecord}>
+        {!isManagement && <form id={isTechSurveyMode ? 'tech-survey-form' : undefined} className={`panel ${formDrawerOpen ? 'open' : ''}`} onSubmit={saveRecord}>
           <div className="drawerTabs" aria-label="Choose record type">
             {(isTechSurveyMode ? Object.entries(resources).filter(([key]) => ['buildings', 'poles'].includes(key)) : isTechnician ? Object.entries(resources).filter(([key]) => key === 'column_checks') : Object.entries(resources)).map(([key, item]) => (
               <button
@@ -3796,6 +3807,7 @@ function App() {
                 {getResourceUiLabel(key)}
               </button>
             ))}
+            {isTechSurveyMode && <button type="button" className="techPlantingModeButton" onClick={enterTechnicianPlanting}>زراعة الأعمدة</button>}
           </div>
 
           <div className="panelHeader">
