@@ -2471,13 +2471,12 @@ function App() {
         .filter((row) => {
           if (isStaffRole && !isManagement) return true;
           if (isTechSurveyMode) {
-            const hasAssignedArea = Boolean(profile?.city && profile?.district);
-            if (!hasAssignedArea) {
-              return row.tech_name === profile?.techName
-                && row.district === profile?.district
-                && (!profile?.city || districtKey(inferCity(row)) === districtKey(profile.city));
-            }
-            return districtKey(row.district) === districtKey(profile.district)
+            const isOwnRecord = row.created_by
+              ? row.created_by === profile?.userId
+              : row.tech_name === profile?.techName;
+            if (isOwnRecord) return true;
+            return Boolean(profile?.city && profile?.district)
+              && districtKey(row.district) === districtKey(profile.district)
               && districtKey(inferCity(row)) === districtKey(profile.city);
           }
           if (!isAdminView) return row.tech_name === profile?.techName && row.district === profile?.district;
