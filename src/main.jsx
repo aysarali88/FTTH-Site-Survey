@@ -3338,7 +3338,11 @@ function App() {
       mergeSavedRecord(active, data || { ...payload, created_at: new Date().toISOString() });
       setForms((previous) => ({
         ...previous,
-        [active]: {
+        [active]: isTechSurveyMode ? {
+          ...previous[active],
+          id: null,
+          photo_url: '',
+        } : {
           ...applyProfileToForm({
             ...current.empty,
             latitude: payload.latitude,
