@@ -3299,6 +3299,10 @@ function App() {
       setMessage('اكتب سبب عدم زراعة العمود.');
       return;
     }
+    if (isTechSurveyMode && !form.district?.trim()) {
+      setMessage('أدخل اسم المنطقة قبل حفظ السجل.');
+      return;
+    }
     setBusy(true);
     try {
       const recordId = makeRecordId(active);
@@ -3335,14 +3339,14 @@ function App() {
       mergeSavedRecord(active, data || { ...payload, created_at: new Date().toISOString() });
       setForms((previous) => ({
         ...previous,
-        [active]: applyProfileToForm(
-          {
+        [active]: {
+          ...applyProfileToForm({
             ...current.empty,
             latitude: payload.latitude,
             longitude: payload.longitude,
-          },
-          profile,
-        ),
+          }, profile),
+          district: payload.district,
+        },
       }));
       setPhotoFile(null);
       setFormDrawerOpen(false);
@@ -3875,8 +3879,8 @@ function App() {
                 type={type}
                 options={options}
                 value={form[name]}
-                locked={name === 'district' || name === 'tech_name'}
-                required={active === 'column_checks' && name === 'is_planted'}
+                locked={name === 'tech_name'}
+                required={(active === 'column_checks' && name === 'is_planted') || (isTechSurveyMode && name === 'district')}
                 onChange={(value) => updateForm(name, value)}
               />
             ))}
@@ -4087,6 +4091,7 @@ function Field({ name, label, type, options, value, locked, required = false, on
         className={locked ? 'lockedInput' : ''}
         type={type}
         step={type === 'number' ? 'any' : undefined}
+        required={required}
         value={value || ''}
         onChange={(event) => onChange(event.target.value)}
       />
