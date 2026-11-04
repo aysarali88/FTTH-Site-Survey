@@ -34,6 +34,7 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-rotate';
 import './styles.css';
 import { hasSupabaseConfig, supabase, SUPABASE_BUCKET } from './supabaseClient';
+import { buildDesignProgressRows, DESIGN_PROGRESS_HEADERS } from './designProgressReport';
 
 const today = new Date().toISOString().slice(0, 10);
 const defaultLocation = { latitude: 32.8872, longitude: 13.1913 };
@@ -1626,6 +1627,7 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = 
   const [city, setCity] = useState(profile.city || 'Misrata');
   const [district, setDistrict] = useState(profile.district || '');
   const [error, setError] = useState('');
+  const [exportError, setExportError] = useState('');
   const [bulkAssignedTo, setBulkAssignedTo] = useState(() => {
     try {
       return localStorage.getItem(`bulk-validate-technician:${profile.username || 'ryadh'}`) || '';
@@ -1709,6 +1711,21 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = 
 
   const previewRoutes = plannedRoutes.slice(0, MAX_MAP_MARKERS);
 
+  function exportProgress() {
+    setExportError('');
+    try {
+      const rows = buildDesignProgressRows(plannedRows, plantingRows);
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.json_to_sheet(rows, { header: DESIGN_PROGRESS_HEADERS });
+      worksheet['!autofilter'] = { ref: worksheet['!ref'] };
+      worksheet['!cols'] = DESIGN_PROGRESS_HEADERS.map((header) => ({ wch: Math.max(16, Math.min(header.length + 4, 26)) }));
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'All areas');
+      XLSX.writeFile(workbook, `design-progress-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (downloadError) {
+      setExportError(`Unable to export Excel: ${downloadError.message}`);
+    }
+  }
+
   async function validateAllPending() {
     if (!canValidateAll || !selectedPendingRows.length || !bulkCity || !bulkDistrict) return;
     if (!technicians.some((technician) => technician.username === bulkAssignedTo)) {
@@ -1741,8 +1758,10 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = 
           <div className="profilePill"><UserRound size={17} /><span>{profile.techName}</span><strong>Design</strong></div>
           <button className="ghost" type="button" onClick={onLogout}><LogOut size={18} /> Logout</button>
           <button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={18} /> Refresh</button>
+          <button className="ghost" type="button" onClick={exportProgress} disabled={busy || (!plannedRows.length && !plantingRows.length)}><Download size={18} /> Export progress Excel</button>
         </div>
       </header>
+      {exportError && <div className="notice">{exportError}</div>}
 
       <section className="stats">
         <article><Upload size={19} /><span>Imported poles / design features</span><strong>{plannedRows.length} / {plannedAssets.length}</strong></article>
