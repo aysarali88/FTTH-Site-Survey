@@ -35,6 +35,7 @@ import 'leaflet-rotate';
 import './styles.css';
 import { hasSupabaseConfig, supabase, SUPABASE_BUCKET } from './supabaseClient';
 import { buildDesignProgressRows, DESIGN_PROGRESS_HEADERS } from './designProgressReport';
+import { plantedAreaGroups, plantingAreaColors, plantingAreaKey } from './plantingMapAreas';
 
 const today = new Date().toISOString().slice(0, 10);
 const defaultLocation = { latitude: 32.8872, longitude: 13.1913 };
@@ -1262,7 +1263,7 @@ function SurveyMarkers({ groupedRecords, onDelete, canDelete }) {
   );
 }
 
-function FastSurveyMarkers({ groupedRecords, onDelete, canDelete, canDeleteOwnedRecord, busy = false }) {
+function FastSurveyMarkers({ groupedRecords, onDelete, canDelete, canDeleteOwnedRecord, getMarkerAppearance, busy = false }) {
   function renderPopup(type, row) {
     const showDelete = canDelete || canDeleteOwnedRecord?.(type, row);
     return (
@@ -1292,28 +1293,55 @@ function FastSurveyMarkers({ groupedRecords, onDelete, canDelete, canDeleteOwned
   }
 
   return Object.entries(groupedRecords).flatMap(([type, rows]) =>
-    rows.map((row) => (
-      <CircleMarker
-        key={`${type}-${row.id}`}
-        center={[row.latitude, row.longitude]}
-        radius={type === 'buildings' ? 7 : 6}
-        renderer={canvasRenderer}
-        pathOptions={{
-          color: '#ffffff',
-          fillColor: markerColors[type],
-          fillOpacity: 0.9,
-          opacity: 0.95,
-          weight: 2,
-        }}
-      >
-        {renderPopup(type, row)}
-      </CircleMarker>
-    )),
+    rows.map((row) => {
+      const appearance = getMarkerAppearance?.(type, row);
+      return (
+        <CircleMarker
+          key={`${type}-${row.id}`}
+          center={[row.latitude, row.longitude]}
+          radius={appearance?.radius ?? (type === 'buildings' ? 7 : 6)}
+          renderer={canvasRenderer}
+          pathOptions={{
+            color: '#ffffff',
+            fillColor: markerColors[type],
+            fillOpacity: 0.9,
+            opacity: 0.95,
+            weight: 2,
+            ...appearance?.pathOptions,
+          }}
+        >
+          {renderPopup(type, row)}
+        </CircleMarker>
+      );
+    }),
   );
+}
+
+function FocusPlantingArea({ areaKey, rows }) {
+  const map = useMap();
+  const lastFocusedKey = useRef('');
+
+  useEffect(() => {
+    if (!areaKey) {
+      lastFocusedKey.current = '';
+      return;
+    }
+    if (lastFocusedKey.current === areaKey) return;
+    const points = rows
+      .filter((row) => yesNoToBoolean(row.is_planted) && plantingAreaKey(row) === areaKey)
+      .map((row) => [Number(row.latitude), Number(row.longitude)]);
+    if (!points.length) return;
+    if (points.length === 1) map.setView(points[0], 17, { animate: false });
+    else map.fitBounds(L.latLngBounds(points).pad(0.2), { maxZoom: 17, animate: false });
+    lastFocusedKey.current = areaKey;
+  }, [map, areaKey, rows]);
+
+  return null;
 }
 
 function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = false }) {
   const [filters, setFilters] = useState({ city: '', district: '', tech: '', status: 'all', fromDate: '', toDate: '' });
+  const [selectedAreaKey, setSelectedAreaKey] = useState('');
 
   const sourceRows = useMemo(
     () => (records || []).map((row) => ({ ...normalizeRow(row, 'column_checks'), city: inferCity(row), record_iso_date: (row.created_at || row.survey_date || '').slice(0, 10) })),
@@ -1357,9 +1385,21 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = 
     return [...groups.values()].sort((a, b) => b.total - a.total || a.city.localeCompare(b.city));
   }, [filteredRows]);
 
-  const mapRows = filteredRows
-    .filter((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)))
-    .slice(0, MAX_MAP_MARKERS);
+  const areaColors = useMemo(() => plantingAreaColors(sourceRows), [sourceRows]);
+  const locatedRows = useMemo(
+    () => filteredRows.filter((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude))),
+    [filteredRows],
+  );
+  const areas = useMemo(() => plantedAreaGroups(locatedRows, areaColors), [locatedRows, areaColors]);
+  useEffect(() => {
+    if (selectedAreaKey && !areas.some((area) => area.key === selectedAreaKey)) setSelectedAreaKey('');
+  }, [areas, selectedAreaKey]);
+  const mapRows = useMemo(() => {
+    if (!selectedAreaKey) return locatedRows.slice(0, MAX_MAP_MARKERS);
+    const selected = locatedRows.filter((row) => yesNoToBoolean(row.is_planted) && plantingAreaKey(row) === selectedAreaKey);
+    const others = locatedRows.filter((row) => !yesNoToBoolean(row.is_planted) || plantingAreaKey(row) !== selectedAreaKey);
+    return [...others.slice(0, Math.max(MAX_MAP_MARKERS - selected.length, 0)), ...selected.slice(0, MAX_MAP_MARKERS)];
+  }, [locatedRows, selectedAreaKey]);
   const centerRow = mapRows[0];
   const mapCenter = centerRow ? [Number(centerRow.latitude), Number(centerRow.longitude)] : [defaultLocation.latitude, defaultLocation.longitude];
   const maxTechnicianCount = Math.max(technicians[0]?.[1] || 1, 1);
@@ -1377,6 +1417,24 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = 
 
   function updateFilter(key, value) {
     setFilters((previous) => ({ ...previous, [key]: value, ...(key === 'city' ? { district: '' } : {}) }));
+    setSelectedAreaKey('');
+  }
+
+  function getPlantingAppearance(type, row) {
+    if (type !== 'column_checks') return null;
+    if (!yesNoToBoolean(row.is_planted)) {
+      return { radius: 5, pathOptions: { fillColor: '#64748b', fillOpacity: selectedAreaKey ? 0.2 : 0.75, opacity: selectedAreaKey ? 0.25 : 0.95 } };
+    }
+    const isDimmed = selectedAreaKey && plantingAreaKey(row) !== selectedAreaKey;
+    return {
+      radius: selectedAreaKey && !isDimmed ? 8 : 6,
+      pathOptions: {
+        fillColor: areaColors.get(plantingAreaKey(row)) || markerColors.column_checks,
+        fillOpacity: isDimmed ? 0.2 : 0.95,
+        opacity: isDimmed ? 0.3 : 1,
+        weight: isDimmed ? 1 : 2,
+      },
+    };
   }
 
   return (
@@ -1414,13 +1472,25 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = 
 
       <div className="dashboardMainGrid">
         <article className="dashboardPanel dashboardMapPanel">
-          <div className="dashboardPanelHead"><div><h3>Planting map</h3><span>{mapRows.length}{filteredRows.length > MAX_MAP_MARKERS ? ` of ${filteredRows.length}` : ''} points shown</span></div><MapPinned size={20} /></div>
+          <div className="dashboardPanelHead"><div><h3>Planting map</h3><span>{mapRows.length}{locatedRows.length > mapRows.length ? ` of ${locatedRows.length}` : ''} points shown</span></div><MapPinned size={20} /></div>
+          <div className="plantingAreaLegend" role="group" aria-label="Planted areas">
+            <button type="button" aria-pressed={!selectedAreaKey} onClick={() => setSelectedAreaKey('')}>All areas</button>
+            {areas.map((area) => (
+              <button key={area.key} type="button" aria-pressed={selectedAreaKey === area.key} onClick={() => setSelectedAreaKey((current) => current === area.key ? '' : area.key)}>
+                <span className="plantingAreaSwatch" style={{ backgroundColor: area.color }} aria-hidden="true" />
+                <span>{area.city} · {area.district}</span>
+                <strong>{area.count}</strong>
+              </button>
+            ))}
+            {locatedRows.some((row) => !yesNoToBoolean(row.is_planted)) && <span className="plantingAreaNeutral"><span className="plantingAreaSwatch" aria-hidden="true" />Not planted</span>}
+          </div>
           <div className="dashboardMapWrap">
             <MapContainer center={mapCenter} zoom={12} maxZoom={22} scrollWheelZoom className="dashboardMap" zoomControl rotate touchRotate rotateControl={{ closeOnZeroBearing: false, position: 'topright' }} bearing={0}>
               <MapLayers />
               <CurrentLocationControl />
               <MapFullscreenControl />
-          <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} onDelete={onDelete} canDelete={!readOnly} busy={busy} />
+              <FocusPlantingArea areaKey={selectedAreaKey} rows={mapRows} />
+              <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} onDelete={onDelete} canDelete={!readOnly} getMarkerAppearance={getPlantingAppearance} busy={busy} />
             </MapContainer>
           </div>
         </article>
