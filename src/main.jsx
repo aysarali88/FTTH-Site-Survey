@@ -1034,7 +1034,7 @@ function CoordinateSearchControl() {
     event.preventDefault();
     const coordinates = parseMapCoordinates(coordinateText);
     if (!coordinates) {
-      setError('أدخل خط الطول ثم خط العرض، مفصولين بفاصلة.');
+      setError('أدخل خط العرض ثم خط الطول، مفصولين بفاصلة.');
       return;
     }
     setError('');
@@ -1050,7 +1050,7 @@ function CoordinateSearchControl() {
       </button>
       {open && <form id="engineer-coordinate-search" className="mapCoordinateForm" onSubmit={goToCoordinates} autoComplete="off" dir="rtl">
         <div className="mapCoordinateFormHead"><strong>الانتقال إلى إحداثيات</strong><button type="button" onClick={() => setOpen(false)} title="إغلاق" aria-label="إغلاق"><X size={17} /></button></div>
-        <label>خط الطول، خط العرض<input type="text" inputMode="text" dir="ltr" value={coordinateText} onChange={(event) => setCoordinateText(event.target.value)} placeholder="15.0707183, 32.3703589" autoFocus /></label>
+        <label>خط العرض، خط الطول<input type="text" inputMode="text" dir="ltr" value={coordinateText} onChange={(event) => setCoordinateText(event.target.value)} placeholder="32.3703589, 15.0707183" autoFocus /></label>
         {error && <span className="mapCoordinateError" role="alert">{error}</span>}
         <button className="mapCoordinateGo" type="submit">اذهب إلى الموقع</button>
       </form>}

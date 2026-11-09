@@ -16,8 +16,8 @@ export function parseMapCoordinates(value) {
   const pair = normalizeCoordinateText(value).match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*[,;\s]\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))$/);
   if (!pair) return null;
 
-  const lng = parseDecimal(pair[1]);
-  const lat = parseDecimal(pair[2]);
+  const lat = parseDecimal(pair[1]);
+  const lng = parseDecimal(pair[2]);
   if (lat === null || lng === null || lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
   return { latitude: lat, longitude: lng };
 }
