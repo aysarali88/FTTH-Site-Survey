@@ -1020,8 +1020,7 @@ function CoordinateSearchControl() {
   const map = useMap();
   const controlRef = useRef(null);
   const [open, setOpen] = useState(false);
-  const [latitude, setLatitude] = useState('');
-  const [longitude, setLongitude] = useState('');
+  const [coordinateText, setCoordinateText] = useState('');
   const [error, setError] = useState('');
   const [target, setTarget] = useState(null);
 
@@ -1033,9 +1032,9 @@ function CoordinateSearchControl() {
 
   function goToCoordinates(event) {
     event.preventDefault();
-    const coordinates = parseMapCoordinates(latitude, longitude);
+    const coordinates = parseMapCoordinates(coordinateText);
     if (!coordinates) {
-      setError('أدخل خط عرض بين -90 و90 وخط طول بين -180 و180.');
+      setError('أدخل خط الطول ثم خط العرض، مفصولين بفاصلة.');
       return;
     }
     setError('');
@@ -1051,8 +1050,7 @@ function CoordinateSearchControl() {
       </button>
       {open && <form id="engineer-coordinate-search" className="mapCoordinateForm" onSubmit={goToCoordinates} autoComplete="off" dir="rtl">
         <div className="mapCoordinateFormHead"><strong>الانتقال إلى إحداثيات</strong><button type="button" onClick={() => setOpen(false)} title="إغلاق" aria-label="إغلاق"><X size={17} /></button></div>
-        <label>خط العرض<input type="text" inputMode="decimal" dir="ltr" value={latitude} onChange={(event) => setLatitude(event.target.value)} placeholder="32.3703589" autoFocus /></label>
-        <label>خط الطول<input type="text" inputMode="decimal" dir="ltr" value={longitude} onChange={(event) => setLongitude(event.target.value)} placeholder="15.0707183" /></label>
+        <label>خط الطول، خط العرض<input type="text" inputMode="text" dir="ltr" value={coordinateText} onChange={(event) => setCoordinateText(event.target.value)} placeholder="15.0707183, 32.3703589" autoFocus /></label>
         {error && <span className="mapCoordinateError" role="alert">{error}</span>}
         <button className="mapCoordinateGo" type="submit">اذهب إلى الموقع</button>
       </form>}

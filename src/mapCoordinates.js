@@ -12,17 +12,12 @@ function parseDecimal(value) {
   return Number.isFinite(number) ? number : null;
 }
 
-export function parseMapCoordinates(latitudeText, longitudeText) {
-  let latitude = normalizeCoordinateText(latitudeText);
-  let longitude = normalizeCoordinateText(longitudeText);
+export function parseMapCoordinates(value) {
+  const pair = normalizeCoordinateText(value).match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*[,;\s]\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))$/);
+  if (!pair) return null;
 
-  if (!longitude) {
-    const pair = latitude.match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*[,;\s]\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))$/);
-    if (pair) [, latitude, longitude] = pair;
-  }
-
-  const lat = parseDecimal(latitude);
-  const lng = parseDecimal(longitude);
+  const lng = parseDecimal(pair[1]);
+  const lat = parseDecimal(pair[2]);
   if (lat === null || lng === null || lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
   return { latitude: lat, longitude: lng };
 }
