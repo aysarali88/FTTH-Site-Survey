@@ -36,6 +36,7 @@ import './styles.css';
 import { hasSupabaseConfig, supabase, SUPABASE_BUCKET } from './supabaseClient';
 import { buildDesignProgressRows, DESIGN_PROGRESS_HEADERS } from './designProgressReport';
 import { plantedAreaGroups, plantingAreaColors, plantingAreaKey } from './plantingMapAreas';
+import { parseMapCoordinates } from './mapCoordinates';
 
 const today = new Date().toISOString().slice(0, 10);
 const defaultLocation = { latitude: 32.8872, longitude: 13.1913 };
@@ -1015,6 +1016,51 @@ function CurrentLocationControl({ onLocated }) {
   </>;
 }
 
+function CoordinateSearchControl() {
+  const map = useMap();
+  const controlRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [error, setError] = useState('');
+  const [target, setTarget] = useState(null);
+
+  useEffect(() => {
+    if (!controlRef.current) return;
+    L.DomEvent.disableClickPropagation(controlRef.current);
+    L.DomEvent.disableScrollPropagation(controlRef.current);
+  }, []);
+
+  function goToCoordinates(event) {
+    event.preventDefault();
+    const coordinates = parseMapCoordinates(latitude, longitude);
+    if (!coordinates) {
+      setError('أدخل خط عرض بين -90 و90 وخط طول بين -180 و180.');
+      return;
+    }
+    setError('');
+    setTarget([coordinates.latitude, coordinates.longitude]);
+    map.flyTo([coordinates.latitude, coordinates.longitude], Math.max(map.getZoom(), 17), { animate: true, duration: 0.8 });
+    setOpen(false);
+  }
+
+  return <>
+    <div className="mapCoordinateControl" ref={controlRef} onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false); }}>
+      <button className="mapCoordinateToggle" type="button" onClick={() => { setOpen((value) => !value); setError(''); }} title="الانتقال إلى إحداثيات" aria-label="الانتقال إلى إحداثيات" aria-expanded={open} aria-controls="engineer-coordinate-search">
+        <Search size={20} />
+      </button>
+      {open && <form id="engineer-coordinate-search" className="mapCoordinateForm" onSubmit={goToCoordinates} autoComplete="off" dir="rtl">
+        <div className="mapCoordinateFormHead"><strong>الانتقال إلى إحداثيات</strong><button type="button" onClick={() => setOpen(false)} title="إغلاق" aria-label="إغلاق"><X size={17} /></button></div>
+        <label>خط العرض<input type="text" inputMode="decimal" dir="ltr" value={latitude} onChange={(event) => setLatitude(event.target.value)} placeholder="32.3703589" autoFocus /></label>
+        <label>خط الطول<input type="text" inputMode="decimal" dir="ltr" value={longitude} onChange={(event) => setLongitude(event.target.value)} placeholder="15.0707183" /></label>
+        {error && <span className="mapCoordinateError" role="alert">{error}</span>}
+        <button className="mapCoordinateGo" type="submit">اذهب إلى الموقع</button>
+      </form>}
+    </div>
+    {target && <CircleMarker center={target} radius={11} interactive={false} pathOptions={{ color: '#ffffff', fillColor: '#e11d48', fillOpacity: 0.95, weight: 3 }} />}
+  </>;
+}
+
 function MapLayers() {
   return (
     <LayersControl position="topright">
@@ -1919,7 +1965,7 @@ function engineerPointIcon(color, selected) {
   });
 }
 
-function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMapClick, onMovePoint, onDeletePlantingRecord, canDeletePlantedRecord, busy = false, addMode = false, moveMode = false, showDirectionsLink = false, fitOnlyInitially = false, viewportKey = '' }) {
+function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMapClick, onMovePoint, onDeletePlantingRecord, canDeletePlantedRecord, busy = false, addMode = false, moveMode = false, showDirectionsLink = false, showCoordinateSearch = false, fitOnlyInitially = false, viewportKey = '' }) {
   const [savedViewport] = useState(() => readSavedMapViewport(viewportKey));
   const first = rows.find((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)));
   const firstPathPoint = paths.flatMap((path) => path.coordinates || [])[0];
@@ -1931,6 +1977,7 @@ function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMa
     <MapContainer center={center} zoom={savedViewport?.zoom ?? 14} maxZoom={22} scrollWheelZoom className="map" zoomControl rotate touchRotate rotateControl={{ closeOnZeroBearing: false, position: 'topright' }} bearing={0}>
       <MapLayers />
       <CurrentLocationControl />
+      {showCoordinateSearch && <CoordinateSearchControl />}
       <MapFullscreenControl />
       <MapFitToContent rows={rows} paths={paths} assets={assets} fitOnce={fitOnlyInitially} skipFit={Boolean(savedViewport)} />
       <MapViewportPersistence storageKey={viewportKey} />
@@ -2164,7 +2211,7 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
              </select>
              {selectedArea && <span>{areaRows.length} poles · {areaRoutes.length} cable routes · {areaAssets.length} design features</span>}
            </div>
-           {selectedArea ? <EngineerMap key={selectedArea.key} rows={areaRows} paths={areaRoutes} assets={areaAssets} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} onMovePoint={handleMovePoint} addMode={addMode} moveMode={moveMode} fitOnlyInitially viewportKey={`engineer-map-viewport:${profile.username || profile.techName}:${selectedArea.key}`} /> : <div className="engineerNoAreas">No uploaded areas are available to work on.</div>}
+           {selectedArea ? <EngineerMap key={selectedArea.key} rows={areaRows} paths={areaRoutes} assets={areaAssets} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setControlsOpen(true); }} onMapClick={handleMapClick} onMovePoint={handleMovePoint} addMode={addMode} moveMode={moveMode} showCoordinateSearch fitOnlyInitially viewportKey={`engineer-map-viewport:${profile.username || profile.techName}:${selectedArea.key}`} /> : <div className="engineerNoAreas">No uploaded areas are available to work on.</div>}
            {addMode && <div className="mapAddHint">Click on the map to place a new point</div>}
            {moveMode && <><button className="mapMoveFinishButton" type="button" onClick={() => setMoveMode(false)}>Finish editing location</button><div className="mapMoveHint">Drag the selected point to the correct location.</div></>}
            <div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div>

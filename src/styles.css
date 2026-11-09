@@ -1921,6 +1921,84 @@ button:disabled {
   text-align: right;
 }
 
+.mapCoordinateControl {
+  bottom: max(70px, env(safe-area-inset-bottom));
+  left: 12px;
+  position: absolute;
+  z-index: 800;
+}
+
+.mapCoordinateToggle {
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.2);
+  color: #0f2a4a;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  width: 44px;
+}
+
+.mapCoordinateToggle:hover,
+.mapCoordinateToggle[aria-expanded="true"] {
+  background: #eff6ff;
+  border-color: #2563eb;
+}
+
+.mapCoordinateForm {
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  bottom: 54px;
+  box-shadow: 0 16px 35px rgba(15, 23, 42, 0.25);
+  display: grid;
+  gap: 10px;
+  left: 0;
+  padding: 12px;
+  position: absolute;
+  width: min(300px, calc(100vw - 24px));
+}
+
+.mapCoordinateFormHead {
+  align-items: center;
+  color: #0f2a4a;
+  display: flex;
+  font-size: 14px;
+  justify-content: space-between;
+}
+
+.mapCoordinateFormHead button {
+  background: transparent;
+  color: #526a80;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  width: 30px;
+}
+
+.mapCoordinateForm label {
+  font-size: 12px;
+  gap: 5px;
+}
+
+.mapCoordinateForm input {
+  font-size: 14px;
+  min-height: 38px;
+}
+
+.mapCoordinateError {
+  color: #b91c1c;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mapCoordinateGo {
+  background: #0f2a4a;
+  color: #ffffff;
+  width: 100%;
+}
+
 @keyframes locationPulse {
   to {
     transform: rotate(360deg);
