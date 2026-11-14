@@ -2024,7 +2024,7 @@ function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMa
   );
 }
 
-function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = [], technicians, onRefresh, onLogout, onValidate, onMove, onDelete, onAdd, busy }) {
+function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = [], technicians, onRefresh, onLogout, onValidate, onMove, onDelete, onAdd, onSwitchToSurvey, busy }) {
   const [selectedId, setSelectedId] = useState('');
   const [selectedAreaKey, setSelectedAreaKey] = useState(() => {
     try {
@@ -2192,7 +2192,7 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
 
   return (
     <main className="app adminMode">
-      <header className="topbar"><div><p className="eyebrow">Site Survey Pro</p><h1>Engineer Validation</h1></div><div className="actions"><div className="profilePill"><UserRound size={17} /><span>{profile.techName}</span><strong>Engineer</strong></div><button className="ghost" type="button" onClick={onLogout}><LogOut size={18} /> Logout</button><button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={18} /> Refresh</button></div></header>
+      <header className="topbar"><div><p className="eyebrow">Site Survey Pro</p><h1>Engineer Validation</h1></div><div className="actions"><div className="profilePill"><UserRound size={17} /><span>{profile.techName}</span><strong>Engineer</strong></div><button className="ghost" type="button" onClick={onLogout}><LogOut size={18} /> Logout</button><button className="ghost" type="button" onClick={onRefresh} disabled={busy}><RefreshCcw size={18} /> Refresh</button><button className="ghost" type="button" onClick={() => onSwitchToSurvey('buildings', { ...selectedArea, latitude: selected?.latitude, longitude: selected?.longitude })}>سيرفي البنايات</button></div></header>
       <section className="stats"><article><Target size={19} /><span>Pending in area</span><strong>{pending.length}</strong></article><article><CheckCircle2 size={19} /><span>Validated in area</span><strong>{areaRows.filter((row) => row.validation_status === 'validated').length}</strong></article><article><X size={19} /><span>Rejected in area</span><strong>{areaRows.filter((row) => row.validation_status === 'rejected').length}</strong></article></section>
       {message && <div className="notice">{message}</div>}
       <button className="mobileLogoutButton" type="button" onClick={onLogout}><LogOut size={18} /><span>تسجيل الخروج</span></button>
@@ -2215,6 +2215,7 @@ function EngineerWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets 
            <div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div>
          </div>
         <section id="engineer-controls" className={`panel engineerControls ${controlsOpen ? 'open' : ''}`}>
+          <div className="mobileWorkflowTabs"><button type="button" onClick={() => onSwitchToSurvey('buildings', { ...selectedArea, latitude: selected?.latitude, longitude: selected?.longitude })}>سيرفي البنايات</button></div>
           <div className="panelHeader"><div><p>Engineer review</p><h2>Validation queue</h2><span className="autoId">{areaRows.length} points in selected area</span></div><Target color="#2563eb" /></div>
           {selected && <><div className="pointDetails"><div><span>Point</span><strong>{selected.point_name || selected.id}</strong></div><div><span>Area / City</span><strong>{selected.city || '-'}</strong></div><div><span>District</span><strong>{selected.district || '-'}</strong></div><div><span>Status</span><strong>{selected.validation_status || '-'}</strong></div></div><div className="coordinateGrid"><label>Latitude<input value={selected.latitude} readOnly /></label><label>Longitude<input value={selected.longitude} readOnly /></label></div><button className={`ghost moveLocationButton${moveMode ? ' active' : ''}`} type="button" onClick={toggleMoveMode} disabled={busy}><MapPin size={17} />{moveMode ? 'Finish editing location' : 'Edit location'}</button>{moveMode && <div className="moveLocationHint">Drag the selected point to the correct location.</div>}<label>Decision<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="validated">Validate</option><option value="rejected">Reject</option></select></label>{status === 'validated' && <label>Assign technician<select value={assignedTo} onChange={(event) => rememberTechnician(event.target.value)}><option value="">{technicians.length ? 'Select technician...' : 'No active technician accounts'}</option>{technicians.map((technician) => <option key={technician.username} value={technician.username}>{technician.display_name || technician.username}</option>)}</select></label>}<label>Notes<textarea rows="4" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><button className="save" type="button" onClick={saveSelected} disabled={busy || (status === 'validated' && !technicians.some((technician) => technician.username === assignedTo))}>Save decision</button><button className="dangerMini engineerDeleteButton" type="button" onClick={deleteSelected} disabled={busy || selected.validation_status === 'planted'}><Trash2 size={17} /> Delete point</button></>}
           {addMode && selectedArea && <div className="engineerAddTarget"><MapPinned size={16} /> New point will be added to {selectedArea.district || 'Unspecified district'} · {selectedArea.city || 'Unknown city'}</div>}
@@ -2593,6 +2594,8 @@ function App() {
   const isTechnician = profile?.role === 'tech';
   const isAccountTechnician = isTechnician && Boolean(profile?.username);
   const isTechSurveyMode = isTechnician && techWorkspaceMode === 'survey';
+  const isEngineerSurveyMode = profile?.role === 'engineer' && techWorkspaceMode === 'survey';
+  const isFieldSurveyMode = isTechSurveyMode || isEngineerSurveyMode;
   const isStaffRole = profile?.role === 'design';
   const current = resources[active];
   const form = forms[active];
@@ -2604,7 +2607,7 @@ function App() {
         .map((row) => normalizeRow(row, type))
         .filter((row) => {
           if (isStaffRole && !isManagement) return true;
-          if (isTechSurveyMode) {
+          if (isFieldSurveyMode) {
             const isOwnRecord = row.created_by
               ? row.created_by === profile?.userId
               : row.tech_name === profile?.techName;
@@ -2622,7 +2625,7 @@ function App() {
         });
     }
     return filtered;
-  }, [records, isAdminView, isManagement, isStaffRole, isTechnician, isTechSurveyMode, profile, adminFilters, query]);
+  }, [records, isAdminView, isManagement, isStaffRole, isFieldSurveyMode, profile, adminFilters, query]);
 
   const currentRows = scopedRecords[active] || [];
   const displayedRows = currentRows.slice(0, MAX_TABLE_ROWS);
@@ -2635,19 +2638,19 @@ function App() {
     let remaining = MAX_MAP_MARKERS;
     return Object.fromEntries(
       Object.entries(scopedRecords).map(([type, rows]) => {
-        if (isTechSurveyMode && !['buildings', 'poles'].includes(type)) return [type, []];
+        if (isFieldSurveyMode && (type === 'column_checks' || (isEngineerSurveyMode && type !== 'buildings'))) return [type, []];
         const limitedRows = rows.slice(0, Math.max(remaining, 0));
         remaining -= limitedRows.length;
         return [type, limitedRows];
       }),
     );
-  }, [scopedRecords, isTechSurveyMode]);
+  }, [scopedRecords, isFieldSurveyMode, isEngineerSurveyMode]);
   const mapMarkerCount = useMemo(
     () => Object.values(mapRecords).reduce((sum, rows) => sum + rows.length, 0),
     [mapRecords],
   );
-  const mapSourceCount = isTechSurveyMode
-    ? scopedRecords.buildings.length + scopedRecords.poles.length
+  const mapSourceCount = isFieldSurveyMode
+    ? scopedRecords.buildings.length + (isTechSurveyMode ? scopedRecords.poles.length : 0)
     : allVisibleRows.length;
   const hiddenMapMarkers = Math.max(mapSourceCount - mapMarkerCount, 0);
   const visiblePhotos = useMemo(
@@ -3432,8 +3435,12 @@ function App() {
       setMessage('اكتب سبب عدم زراعة العمود.');
       return;
     }
-    if (isTechSurveyMode && !form.district?.trim()) {
+    if (isFieldSurveyMode && !form.district?.trim()) {
       setMessage('أدخل اسم المنطقة قبل حفظ السجل.');
+      return;
+    }
+    if (isEngineerSurveyMode && !form.city) {
+      setMessage('اختر المدينة قبل حفظ السجل.');
       return;
     }
     setBusy(true);
@@ -3472,7 +3479,7 @@ function App() {
       mergeSavedRecord(active, data || { ...payload, created_at: new Date().toISOString() });
       setForms((previous) => ({
         ...previous,
-        [active]: isTechSurveyMode ? {
+        [active]: isFieldSurveyMode ? {
           ...previous[active],
           id: null,
           photo_url: '',
@@ -3674,15 +3681,25 @@ function App() {
     downloadTextFile(kml, `site-survey-${formatDate(new Date())}.kml`, 'application/vnd.google-earth.kml+xml;charset=utf-8');
   }
 
-  function enterTechnicianSurvey(type = 'buildings') {
+  function enterFieldSurvey(type = 'buildings', area = null) {
     setTechWorkspaceMode('survey');
     setActive(type === 'poles' ? 'poles' : 'buildings');
+    if (area) setForms((previous) => ({
+      ...previous,
+      buildings: {
+        ...previous.buildings,
+        city: area.city || previous.buildings.city,
+        district: area.district || previous.buildings.district,
+        latitude: Number.isFinite(Number(area.latitude)) && area.latitude != null ? Number(area.latitude) : previous.buildings.latitude,
+        longitude: Number.isFinite(Number(area.longitude)) && area.longitude != null ? Number(area.longitude) : previous.buildings.longitude,
+      },
+    }));
     setPhotoFile(null);
     setFormDrawerOpen(true);
     setMessage('');
   }
 
-  function enterTechnicianPlanting() {
+  function leaveFieldSurvey() {
     setTechWorkspaceMode('planting');
     if (isTechnician && !profile?.username) setActive('column_checks');
     setFormDrawerOpen(false);
@@ -3698,8 +3715,8 @@ function App() {
     return <DesignWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} plantingRows={records.column_checks} technicians={technicianOptions} onUpload={uploadPlannedPoints} onDeleteBatch={deletePlannedBatch} onValidateAll={validateAreaPendingPlannedPoles} onRefresh={loadAll} onLogout={changeProfile} busy={busy} />;
   }
 
-  if (profile.role === 'engineer') {
-    return <EngineerWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} technicians={technicianOptions} onRefresh={loadAll} onLogout={changeProfile} onValidate={validatePlannedPole} onMove={movePlannedPole} onDelete={deletePlannedPole} onAdd={addPlannedPole} busy={busy} />;
+  if (profile.role === 'engineer' && !isEngineerSurveyMode) {
+    return <EngineerWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} technicians={technicianOptions} onRefresh={loadAll} onLogout={changeProfile} onValidate={validatePlannedPole} onMove={movePlannedPole} onDelete={deletePlannedPole} onAdd={addPlannedPole} onSwitchToSurvey={enterFieldSurvey} busy={busy} />;
   }
 
   if (profile.role === 'supervisor') {
@@ -3707,7 +3724,7 @@ function App() {
   }
 
   if (profile.role === 'tech' && profile.username && techWorkspaceMode === 'planting') {
-    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} legacyAssignments={legacyAssignments} legacyRecords={records.column_checks} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} onLegacyAdd={addLegacyPlanting} onDeleteRecord={deleteRecord} onSwitchToSurvey={enterTechnicianSurvey} busy={busy} />;
+    return <SupervisorWorkspace profile={profile} plannedRows={plannedRows} plannedRoutes={plannedRoutes} plannedAssets={plannedAssets} legacyAssignments={legacyAssignments} legacyRecords={records.column_checks} onRefresh={loadAll} onLogout={changeProfile} onPlant={plantPlannedPole} onLegacyAdd={addLegacyPlanting} onDeleteRecord={deleteRecord} onSwitchToSurvey={enterFieldSurvey} busy={busy} />;
   }
 
   return (
@@ -3753,16 +3770,17 @@ function App() {
               <RefreshCcw size={18} />
               Refresh
             </button>
-            {isTechnician && <button className="ghost" type="button" onClick={isTechSurveyMode ? enterTechnicianPlanting : () => enterTechnicianSurvey()}>{isTechSurveyMode ? 'زراعة الأعمدة' : 'نماذج المسح'}</button>}
+            {isTechnician && <button className="ghost" type="button" onClick={isTechSurveyMode ? leaveFieldSurvey : () => enterFieldSurvey()}>{isTechSurveyMode ? 'زراعة الأعمدة' : 'نماذج المسح'}</button>}
+            {isEngineerSurveyMode && <button className="ghost" type="button" onClick={leaveFieldSurvey}>العودة إلى Validation</button>}
           </div>
         )}
         <div className="topbarHeading">
           <p className="eyebrow">Site Survey Pro</p>
-          <h1>{isAdminView ? 'Dashboard' : isTechSurveyMode ? 'Building & Pole Survey' : 'خريطة الرفع الميداني'}</h1>
+          <h1>{isAdminView ? 'Dashboard' : isEngineerSurveyMode ? 'Building Survey' : isTechSurveyMode ? 'Building & Pole Survey' : 'خريطة الرفع الميداني'}</h1>
         </div>
       </header>
 
-      {isTechSurveyMode && <button className="engineerPanelToggle" type="button" onClick={() => setFormDrawerOpen((open) => !open)} aria-expanded={formDrawerOpen} aria-controls="tech-survey-form" aria-label={formDrawerOpen ? 'إخفاء قائمة نماذج المسح' : 'فتح قائمة نماذج المسح'}><Menu size={24} /></button>}
+      {isFieldSurveyMode && <button className="engineerPanelToggle" type="button" onClick={() => setFormDrawerOpen((open) => !open)} aria-expanded={formDrawerOpen} aria-controls="field-survey-form" aria-label={formDrawerOpen ? 'إخفاء قائمة نماذج المسح' : 'فتح قائمة نماذج المسح'}><Menu size={24} /></button>}
 
       {isAdmin && <div className="onlineSessionsWrap" ref={onlineUsersRef}>
         <button
@@ -3792,7 +3810,7 @@ function App() {
         </div>}
       </div>}
 
-      {(!isAdminView || adminPage === 'data') && <section className={`stats${isTechSurveyMode ? ' techSurveyStats' : ''}`}>
+      {(!isAdminView || adminPage === 'data') && <section className={`stats${isFieldSurveyMode ? ' techSurveyStats' : ''}`}>
         <article>
           <ClipboardList size={19} />
           <span>Buildings</span>
@@ -3803,7 +3821,7 @@ function App() {
           <span>Poles</span>
           <strong>{totals.poles}</strong>
         </article>
-        {!isTechSurveyMode && <article>
+        {!isFieldSurveyMode && <article>
           <CheckCircle2 size={19} />
           <span>Pole Planting</span>
           <strong>{totals.column_checks}</strong>
@@ -3897,7 +3915,7 @@ function App() {
       {isAdmin && adminPage === 'data' && <WorkflowQueue plannedRows={plannedRows} technicians={technicianOptions} onAssign={assignPlannedPole} onRefresh={loadAll} busy={busy} />}
 
       {(!isAdminView || (isAdmin && adminPage === 'data')) && <nav className="tabs" aria-label="Survey sections">
-        {(isTechSurveyMode ? Object.entries(resources).filter(([key]) => ['buildings', 'poles'].includes(key)) : isTechnician ? Object.entries(resources).filter(([key]) => key === 'column_checks') : Object.entries(resources)).map(([key, item]) => (
+        {(isEngineerSurveyMode ? Object.entries(resources).filter(([key]) => key === 'buildings') : isTechSurveyMode ? Object.entries(resources).filter(([key]) => ['buildings', 'poles'].includes(key)) : isTechnician ? Object.entries(resources).filter(([key]) => key === 'column_checks') : Object.entries(resources)).map(([key, item]) => (
           <button
             key={key}
             type="button"
@@ -3963,9 +3981,9 @@ function App() {
           </div>
         </div>
 
-        {!isManagement && <form id={isTechSurveyMode ? 'tech-survey-form' : undefined} className={`panel ${formDrawerOpen ? 'open' : ''}`} onSubmit={saveRecord}>
+        {!isManagement && <form id={isFieldSurveyMode ? 'field-survey-form' : undefined} className={`panel ${formDrawerOpen ? 'open' : ''}`} onSubmit={saveRecord}>
           <div className="drawerTabs" aria-label="Choose record type">
-            {(isTechSurveyMode ? Object.entries(resources).filter(([key]) => ['buildings', 'poles'].includes(key)) : isTechnician ? Object.entries(resources).filter(([key]) => key === 'column_checks') : Object.entries(resources)).map(([key, item]) => (
+            {(isEngineerSurveyMode ? Object.entries(resources).filter(([key]) => key === 'buildings') : isTechSurveyMode ? Object.entries(resources).filter(([key]) => ['buildings', 'poles'].includes(key)) : isTechnician ? Object.entries(resources).filter(([key]) => key === 'column_checks') : Object.entries(resources)).map(([key, item]) => (
               <button
                 key={key}
                 type="button"
@@ -3979,7 +3997,7 @@ function App() {
                 {getResourceUiLabel(key)}
               </button>
             ))}
-            {isTechSurveyMode && <button type="button" className="techPlantingModeButton" onClick={enterTechnicianPlanting}>زراعة الأعمدة</button>}
+            {isFieldSurveyMode && <button type="button" className="techPlantingModeButton" onClick={leaveFieldSurvey}>{isEngineerSurveyMode ? 'العودة إلى Validation' : 'زراعة الأعمدة'}</button>}
           </div>
 
           <div className="panelHeader">
@@ -4007,6 +4025,14 @@ function App() {
             </label>
           </div>
 
+          {isEngineerSurveyMode && <label className="wide">المدينة
+            <select required value={form.city} onChange={(event) => updateForm('city', event.target.value)}>
+              <option value="">اختر المدينة</option>
+              <option value="Tripoli">Tripoli</option>
+              <option value="Misrata">Misrata</option>
+            </select>
+          </label>}
+
           <div className="fieldGrid">
             {current.fields.map(([name, label, type, options]) => (
               <Field
@@ -4017,7 +4043,7 @@ function App() {
                 options={options}
                 value={form[name]}
                 locked={name === 'tech_name'}
-                required={(active === 'column_checks' && name === 'is_planted') || (isTechSurveyMode && name === 'district')}
+                required={(active === 'column_checks' && name === 'is_planted') || (isFieldSurveyMode && name === 'district')}
                 onChange={(value) => updateForm(name, value)}
               />
             ))}
