@@ -1393,10 +1393,13 @@ function PolePlantingDashboard({ records, plannedRows = [], onRefresh, busy, onD
     [records],
   );
 
-  const cityOptions = useMemo(() => [...new Set(sourceRows.map((row) => row.city))].sort(), [sourceRows]);
+  const cityOptions = useMemo(
+    () => [...new Set([...sourceRows, ...plannedRows.filter((row) => !row.deleted_at)].map((row) => row.city).filter(Boolean))].sort(),
+    [sourceRows, plannedRows],
+  );
   const districtOptions = useMemo(
-    () => [...new Set(sourceRows.filter((row) => !filters.city || row.city === filters.city).map((row) => row.district).filter(Boolean))].sort(),
-    [sourceRows, filters.city],
+    () => [...new Set([...sourceRows, ...plannedRows.filter((row) => !row.deleted_at)].filter((row) => !filters.city || row.city === filters.city).map((row) => row.district).filter(Boolean))].sort(),
+    [sourceRows, plannedRows, filters.city],
   );
   const techOptions = useMemo(() => [...new Set(sourceRows.map((row) => row.tech_name).filter(Boolean))].sort(), [sourceRows]);
 
@@ -1435,7 +1438,7 @@ function PolePlantingDashboard({ records, plannedRows = [], onRefresh, busy, onD
     () => filteredRows.filter((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude))),
     [filteredRows],
   );
-  const unplantedPlanned = useMemo(() => readOnly && !['planted', 'objection'].includes(filters.status)
+  const unplantedPlanned = useMemo(() => !['planted', 'objection'].includes(filters.status)
     ? plannedRows.filter((row) => !row.deleted_at
       && row.validation_status !== 'planted'
       && !yesNoToBoolean(row.is_planted)
@@ -1446,7 +1449,7 @@ function PolePlantingDashboard({ records, plannedRows = [], onRefresh, busy, onD
       && !filters.tech
       && (!filters.fromDate || (row.created_at || '').slice(0, 10) >= filters.fromDate)
       && (!filters.toDate || (row.created_at || '').slice(0, 10) <= filters.toDate))
-    : [], [plannedRows, readOnly, filters]);
+    : [], [plannedRows, filters]);
   const unplantedMapRows = unplantedPlanned.slice(0, MAX_MAP_MARKERS);
   const areas = useMemo(() => plantedAreaGroups(locatedRows, areaColors), [locatedRows, areaColors]);
   useEffect(() => {
@@ -1482,7 +1485,7 @@ function PolePlantingDashboard({ records, plannedRows = [], onRefresh, busy, onD
     if (type !== 'column_checks') return null;
     if (!yesNoToBoolean(row.is_planted)) {
       const isDimmed = selectedAreaKey && plantingAreaKey(row) !== selectedAreaKey;
-      return { radius: 5, pathOptions: { fillColor: readOnly ? '#f59e0b' : '#64748b', fillOpacity: isDimmed ? 0.2 : 0.75, opacity: isDimmed ? 0.25 : 0.95 } };
+      return { radius: 5, pathOptions: { fillColor: '#f59e0b', fillOpacity: isDimmed ? 0.2 : 0.75, opacity: isDimmed ? 0.25 : 0.95 } };
     }
     const isDimmed = selectedAreaKey && plantingAreaKey(row) !== selectedAreaKey;
     return {
@@ -1541,7 +1544,7 @@ function PolePlantingDashboard({ records, plannedRows = [], onRefresh, busy, onD
                 <strong>{area.count}</strong>
               </button>
             ))}
-            {(unplantedPlanned.length > 0 || locatedRows.some((row) => !yesNoToBoolean(row.is_planted))) && <span className="plantingAreaNeutral"><span className="plantingAreaSwatch" style={readOnly ? { backgroundColor: '#f59e0b' } : undefined} aria-hidden="true" />Not planted</span>}
+            {(unplantedPlanned.length > 0 || locatedRows.some((row) => !yesNoToBoolean(row.is_planted))) && <button type="button" aria-pressed={filters.status === 'not_planted'} onClick={() => updateFilter('status', filters.status === 'not_planted' ? 'all' : 'not_planted')}><span className="plantingAreaSwatch" style={{ backgroundColor: '#f59e0b' }} aria-hidden="true" /><span>غير مزروع</span><strong>{unplantedPlanned.length + locatedRows.filter((row) => !yesNoToBoolean(row.is_planted)).length}</strong></button>}
           </div>
           <div className="dashboardMapWrap">
             <MapContainer center={mapCenter} zoom={12} maxZoom={22} scrollWheelZoom className="dashboardMap" zoomControl rotate touchRotate rotateControl={{ closeOnZeroBearing: false, position: 'topright' }} bearing={0}>
@@ -3871,7 +3874,7 @@ function App() {
       )}
 
       {isAdminView && adminPage === 'dashboard' && (
-        <PolePlantingDashboard records={records.column_checks} plannedRows={isManagement ? plannedRows : []} onRefresh={loadAll} busy={busy} onDelete={deleteRecord} readOnly={isManagement} />
+        <PolePlantingDashboard records={records.column_checks} plannedRows={plannedRows} onRefresh={loadAll} busy={busy} onDelete={deleteRecord} readOnly={isManagement} />
       )}
 
       {isManagement && adminPage === 'operations' && (
