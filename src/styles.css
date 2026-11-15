@@ -2676,6 +2676,26 @@ td {
   color: #617186;
 }
 
+.plantingAreaSummary {
+  border-top: 1px solid #dce7f1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0 0 13px;
+  padding-top: 12px;
+}
+
+.plantingAreaSummary span {
+  color: #526a80;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.plantingAreaSummary strong {
+  color: #14365b;
+  margin-inline-start: 5px;
+}
+
 .dashboardMapWrap {
   border-radius: 9px;
   height: 390px;

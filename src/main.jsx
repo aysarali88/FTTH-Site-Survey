@@ -1293,6 +1293,7 @@ function SurveyMarkers({ groupedRecords, onDelete, canDelete }) {
             <span>{row.id}</span>
             <span>{row.district || '-'}</span>
             <span>{row.tech_name || '-'}</span>
+            {type === 'column_checks' && <span>الحالة: {yesNoToBoolean(row.is_planted) ? 'مزروع' : 'لم يُزرع'}</span>}
             {row.planting_reason && <span>سبب عدم الزراعة: {row.planting_reason}</span>}
             <span>{formatDate(row.created_at || row.survey_date)} {formatTime(row.created_at)}</span>
             {row.photo_url && <a href={row.photo_url} target="_blank" rel="noreferrer">فتح الصورة</a>}
@@ -1362,7 +1363,7 @@ function FastSurveyMarkers({ groupedRecords, onDelete, canDelete, canDeleteOwned
   );
 }
 
-function FocusPlantingArea({ areaKey, rows }) {
+function FocusPlantingArea({ areaKey, rows, includeUnplanted = false }) {
   const map = useMap();
   const lastFocusedKey = useRef('');
 
@@ -1373,13 +1374,13 @@ function FocusPlantingArea({ areaKey, rows }) {
     }
     if (lastFocusedKey.current === areaKey) return;
     const points = rows
-      .filter((row) => yesNoToBoolean(row.is_planted) && plantingAreaKey(row) === areaKey)
+      .filter((row) => (includeUnplanted || yesNoToBoolean(row.is_planted)) && plantingAreaKey(row) === areaKey)
       .map((row) => [Number(row.latitude), Number(row.longitude)]);
     if (!points.length) return;
     if (points.length === 1) map.setView(points[0], 17, { animate: false });
     else map.fitBounds(L.latLngBounds(points).pad(0.2), { maxZoom: 17, animate: false });
     lastFocusedKey.current = areaKey;
-  }, [map, areaKey, rows]);
+  }, [map, areaKey, rows, includeUnplanted]);
 
   return null;
 }
@@ -1450,17 +1451,45 @@ function PolePlantingDashboard({ records, plannedRows = [], onRefresh, busy, onD
       && (!filters.fromDate || (row.created_at || '').slice(0, 10) >= filters.fromDate)
       && (!filters.toDate || (row.created_at || '').slice(0, 10) <= filters.toDate))
     : [], [plannedRows, filters]);
-  const unplantedMapRows = unplantedPlanned.slice(0, MAX_MAP_MARKERS);
-  const areas = useMemo(() => plantedAreaGroups(locatedRows, areaColors), [locatedRows, areaColors]);
+  const areas = useMemo(() => {
+    if (readOnly) return plantedAreaGroups(locatedRows, areaColors);
+    const groups = new Map();
+    [...locatedRows, ...unplantedPlanned].forEach((row) => {
+      const key = plantingAreaKey(row);
+      const current = groups.get(key);
+      if (current) current.count += 1;
+      else {
+        const [city, district] = JSON.parse(key);
+        groups.set(key, { key, city, district, count: 1, color: '#2563eb' });
+      }
+    });
+    return [...groups.values()].sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+  }, [readOnly, locatedRows, unplantedPlanned, areaColors]);
   useEffect(() => {
     if (selectedAreaKey && !areas.some((area) => area.key === selectedAreaKey)) setSelectedAreaKey('');
   }, [areas, selectedAreaKey]);
   const mapRows = useMemo(() => {
     if (!selectedAreaKey) return locatedRows.slice(0, MAX_MAP_MARKERS);
+    if (!readOnly) return locatedRows.filter((row) => plantingAreaKey(row) === selectedAreaKey).slice(0, MAX_MAP_MARKERS);
     const selected = locatedRows.filter((row) => yesNoToBoolean(row.is_planted) && plantingAreaKey(row) === selectedAreaKey);
     const others = locatedRows.filter((row) => !yesNoToBoolean(row.is_planted) || plantingAreaKey(row) !== selectedAreaKey);
     return [...others.slice(0, Math.max(MAX_MAP_MARKERS - selected.length, 0)), ...selected.slice(0, MAX_MAP_MARKERS)];
-  }, [locatedRows, selectedAreaKey]);
+  }, [locatedRows, selectedAreaKey, readOnly]);
+  const unplantedMapRows = useMemo(() => (selectedAreaKey && !readOnly
+    ? unplantedPlanned.filter((row) => plantingAreaKey(row) === selectedAreaKey)
+    : unplantedPlanned).slice(0, MAX_MAP_MARKERS), [unplantedPlanned, selectedAreaKey, readOnly]);
+  const selectedAreaSummary = useMemo(() => {
+    if (readOnly || !selectedAreaKey) return null;
+    const areaRecords = locatedRows.filter((row) => plantingAreaKey(row) === selectedAreaKey);
+    const areaPlanned = unplantedPlanned.filter((row) => plantingAreaKey(row) === selectedAreaKey);
+    return {
+      planted: areaRecords.filter((row) => yesNoToBoolean(row.is_planted)).length,
+      validated: areaPlanned.filter((row) => row.validation_status === 'validated').length,
+      notValidated: areaPlanned.filter((row) => !['validated', 'rejected'].includes(row.validation_status)).length,
+      rejected: areaPlanned.filter((row) => row.validation_status === 'rejected').length,
+      notPlantedRecords: areaRecords.filter((row) => !yesNoToBoolean(row.is_planted)).length,
+    };
+  }, [readOnly, selectedAreaKey, locatedRows, unplantedPlanned]);
   const centerRow = mapRows[0] || unplantedMapRows[0];
   const mapCenter = centerRow ? [Number(centerRow.latitude), Number(centerRow.longitude)] : [defaultLocation.latitude, defaultLocation.longitude];
   const maxTechnicianCount = Math.max(technicians[0]?.[1] || 1, 1);
@@ -1483,6 +1512,7 @@ function PolePlantingDashboard({ records, plannedRows = [], onRefresh, busy, onD
 
   function getPlantingAppearance(type, row) {
     if (type !== 'column_checks') return null;
+    if (!readOnly) return { radius: 6, pathOptions: { fillColor: '#2563eb', fillOpacity: 0.9, opacity: 1 } };
     if (!yesNoToBoolean(row.is_planted)) {
       const isDimmed = selectedAreaKey && plantingAreaKey(row) !== selectedAreaKey;
       return { radius: 5, pathOptions: { fillColor: '#f59e0b', fillOpacity: isDimmed ? 0.2 : 0.75, opacity: isDimmed ? 0.25 : 0.95 } };
@@ -1535,28 +1565,35 @@ function PolePlantingDashboard({ records, plannedRows = [], onRefresh, busy, onD
       <div className="dashboardMainGrid">
         <article className="dashboardPanel dashboardMapPanel">
           <div className="dashboardPanelHead"><div><h3>Planting map</h3><span>{mapRows.length + unplantedMapRows.length}{locatedRows.length + unplantedPlanned.length > mapRows.length + unplantedMapRows.length ? ` of ${locatedRows.length + unplantedPlanned.length}` : ''} points shown</span></div><MapPinned size={20} /></div>
-          <div className="plantingAreaLegend" role="group" aria-label="Planted areas">
+          <div className="plantingAreaLegend" role="group" aria-label="Planting areas">
             <button type="button" aria-pressed={!selectedAreaKey} onClick={() => setSelectedAreaKey('')}>All areas</button>
             {areas.map((area) => (
               <button key={area.key} type="button" aria-pressed={selectedAreaKey === area.key} onClick={() => setSelectedAreaKey((current) => current === area.key ? '' : area.key)}>
-                <span className="plantingAreaSwatch" style={{ backgroundColor: area.color }} aria-hidden="true" />
+                <span className="plantingAreaSwatch" style={{ backgroundColor: readOnly ? area.color : '#2563eb' }} aria-hidden="true" />
                 <span>{area.city} · {area.district}</span>
                 <strong>{area.count}</strong>
               </button>
             ))}
-            {(unplantedPlanned.length > 0 || locatedRows.some((row) => !yesNoToBoolean(row.is_planted))) && <button type="button" aria-pressed={filters.status === 'not_planted'} onClick={() => updateFilter('status', filters.status === 'not_planted' ? 'all' : 'not_planted')}><span className="plantingAreaSwatch" style={{ backgroundColor: '#f59e0b' }} aria-hidden="true" /><span>غير مزروع</span><strong>{unplantedPlanned.length + locatedRows.filter((row) => !yesNoToBoolean(row.is_planted)).length}</strong></button>}
+            {(unplantedPlanned.length > 0 || locatedRows.some((row) => !yesNoToBoolean(row.is_planted))) && <button type="button" aria-pressed={filters.status === 'not_planted'} onClick={() => readOnly ? updateFilter('status', filters.status === 'not_planted' ? 'all' : 'not_planted') : setFilters((previous) => ({ ...previous, status: previous.status === 'not_planted' ? 'all' : 'not_planted' }))}><span className="plantingAreaSwatch" style={{ backgroundColor: readOnly ? '#f59e0b' : '#2563eb' }} aria-hidden="true" /><span>غير مزروع</span><strong>{unplantedPlanned.length + locatedRows.filter((row) => !yesNoToBoolean(row.is_planted)).length}</strong></button>}
           </div>
+          {selectedAreaSummary && <div className="plantingAreaSummary" aria-live="polite">
+            <span>مزروع <strong>{selectedAreaSummary.planted}</strong></span>
+            <span>تم Validate ولم يُزرع <strong>{selectedAreaSummary.validated}</strong></span>
+            <span>لم يتم Validate <strong>{selectedAreaSummary.notValidated}</strong></span>
+            {selectedAreaSummary.rejected > 0 && <span>مرفوض <strong>{selectedAreaSummary.rejected}</strong></span>}
+            {selectedAreaSummary.notPlantedRecords > 0 && <span>سجلات لم تُزرع <strong>{selectedAreaSummary.notPlantedRecords}</strong></span>}
+          </div>}
           <div className="dashboardMapWrap">
             <MapContainer center={mapCenter} zoom={12} maxZoom={22} scrollWheelZoom className="dashboardMap" zoomControl rotate touchRotate rotateControl={{ closeOnZeroBearing: false, position: 'topright' }} bearing={0}>
               <MapLayers />
               <CurrentLocationControl />
               <MapFullscreenControl />
-              <FocusPlantingArea areaKey={selectedAreaKey} rows={mapRows} />
+              <FocusPlantingArea areaKey={selectedAreaKey} rows={readOnly ? mapRows : [...mapRows, ...unplantedMapRows]} includeUnplanted={!readOnly} />
               <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} onDelete={onDelete} canDelete={!readOnly} getMarkerAppearance={getPlantingAppearance} busy={busy} />
               {unplantedMapRows.map((row) => {
                 const isDimmed = selectedAreaKey && plantingAreaKey(row) !== selectedAreaKey;
-                return <CircleMarker key={`planned-${row.id}`} center={[Number(row.latitude), Number(row.longitude)]} radius={5} renderer={canvasRenderer} pathOptions={{ color: '#ffffff', fillColor: '#f59e0b', fillOpacity: isDimmed ? 0.2 : 0.9, opacity: isDimmed ? 0.25 : 0.95, weight: 2 }}>
-                  <Popup><div className="markerPopup"><strong>{row.point_name || row.id}</strong><span>{row.city || '-'} · {row.district || '-'}</span><span>لم يُزرع · {row.validation_status || 'pending'}</span><span>الإحداثيات: {row.latitude}, {row.longitude}</span></div></Popup>
+                return <CircleMarker key={`planned-${row.id}`} center={[Number(row.latitude), Number(row.longitude)]} radius={5} renderer={canvasRenderer} pathOptions={{ color: '#ffffff', fillColor: readOnly ? '#f59e0b' : '#2563eb', fillOpacity: isDimmed ? 0.2 : 0.9, opacity: isDimmed ? 0.25 : 0.95, weight: 2 }}>
+                  <Popup><div className="markerPopup"><strong>{row.point_name || row.id}</strong><span>{row.city || '-'} · {row.district || '-'}</span><span>{row.validation_status === 'validated' ? 'تم Validate ولم يُزرع' : row.validation_status === 'rejected' ? 'مرفوض' : 'لم يتم Validate'}</span><span>الإحداثيات: {row.latitude}, {row.longitude}</span></div></Popup>
                 </CircleMarker>;
               })}
             </MapContainer>
