@@ -2686,14 +2686,25 @@ td {
 }
 
 .plantingAreaSummary span {
+  align-items: center;
   color: #526a80;
+  display: inline-flex;
   font-size: 12px;
   font-weight: 700;
+  gap: 5px;
 }
 
 .plantingAreaSummary strong {
   color: #14365b;
-  margin-inline-start: 5px;
+}
+
+.plantingStatusDot {
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #7b8d9e;
+  flex: none;
+  height: 12px;
+  width: 12px;
 }
 
 .dashboardMapWrap {
