@@ -931,7 +931,7 @@ function MapResizeSync({ expanded }) {
   return null;
 }
 
-function MapFullscreenControl() {
+function MapFullscreenControl({ showLabel = false }) {
   const map = useMap();
   const [expanded, setExpanded] = useState(false);
 
@@ -967,6 +967,7 @@ function MapFullscreenControl() {
       aria-pressed={expanded}
     >
       {expanded ? <Minimize2 size={19} /> : <Expand size={19} />}
+      {showLabel && <span>{expanded ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}</span>}
     </button>
     <MapResizeSync expanded={expanded} />
   </>;
@@ -1383,7 +1384,7 @@ function FocusPlantingArea({ areaKey, rows }) {
   return null;
 }
 
-function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = false }) {
+function PolePlantingDashboard({ records, plannedRows = [], onRefresh, busy, onDelete, readOnly = false }) {
   const [filters, setFilters] = useState({ city: '', district: '', tech: '', status: 'all', fromDate: '', toDate: '' });
   const [selectedAreaKey, setSelectedAreaKey] = useState('');
 
@@ -1434,6 +1435,19 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = 
     () => filteredRows.filter((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude))),
     [filteredRows],
   );
+  const unplantedPlanned = useMemo(() => readOnly && !['planted', 'objection'].includes(filters.status)
+    ? plannedRows.filter((row) => !row.deleted_at
+      && row.validation_status !== 'planted'
+      && !yesNoToBoolean(row.is_planted)
+      && Number.isFinite(Number(row.latitude))
+      && Number.isFinite(Number(row.longitude))
+      && (!filters.city || row.city === filters.city)
+      && (!filters.district || row.district === filters.district)
+      && !filters.tech
+      && (!filters.fromDate || (row.created_at || '').slice(0, 10) >= filters.fromDate)
+      && (!filters.toDate || (row.created_at || '').slice(0, 10) <= filters.toDate))
+    : [], [plannedRows, readOnly, filters]);
+  const unplantedMapRows = unplantedPlanned.slice(0, MAX_MAP_MARKERS);
   const areas = useMemo(() => plantedAreaGroups(locatedRows, areaColors), [locatedRows, areaColors]);
   useEffect(() => {
     if (selectedAreaKey && !areas.some((area) => area.key === selectedAreaKey)) setSelectedAreaKey('');
@@ -1444,7 +1458,7 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = 
     const others = locatedRows.filter((row) => !yesNoToBoolean(row.is_planted) || plantingAreaKey(row) !== selectedAreaKey);
     return [...others.slice(0, Math.max(MAX_MAP_MARKERS - selected.length, 0)), ...selected.slice(0, MAX_MAP_MARKERS)];
   }, [locatedRows, selectedAreaKey]);
-  const centerRow = mapRows[0];
+  const centerRow = mapRows[0] || unplantedMapRows[0];
   const mapCenter = centerRow ? [Number(centerRow.latitude), Number(centerRow.longitude)] : [defaultLocation.latitude, defaultLocation.longitude];
   const maxTechnicianCount = Math.max(technicians[0]?.[1] || 1, 1);
   const maxCityCount = Math.max(cities[0]?.[1] || 1, 1);
@@ -1467,7 +1481,8 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = 
   function getPlantingAppearance(type, row) {
     if (type !== 'column_checks') return null;
     if (!yesNoToBoolean(row.is_planted)) {
-      return { radius: 5, pathOptions: { fillColor: '#64748b', fillOpacity: selectedAreaKey ? 0.2 : 0.75, opacity: selectedAreaKey ? 0.25 : 0.95 } };
+      const isDimmed = selectedAreaKey && plantingAreaKey(row) !== selectedAreaKey;
+      return { radius: 5, pathOptions: { fillColor: readOnly ? '#f59e0b' : '#64748b', fillOpacity: isDimmed ? 0.2 : 0.75, opacity: isDimmed ? 0.25 : 0.95 } };
     }
     const isDimmed = selectedAreaKey && plantingAreaKey(row) !== selectedAreaKey;
     return {
@@ -1516,7 +1531,7 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = 
 
       <div className="dashboardMainGrid">
         <article className="dashboardPanel dashboardMapPanel">
-          <div className="dashboardPanelHead"><div><h3>Planting map</h3><span>{mapRows.length}{locatedRows.length > mapRows.length ? ` of ${locatedRows.length}` : ''} points shown</span></div><MapPinned size={20} /></div>
+          <div className="dashboardPanelHead"><div><h3>Planting map</h3><span>{mapRows.length + unplantedMapRows.length}{locatedRows.length + unplantedPlanned.length > mapRows.length + unplantedMapRows.length ? ` of ${locatedRows.length + unplantedPlanned.length}` : ''} points shown</span></div><MapPinned size={20} /></div>
           <div className="plantingAreaLegend" role="group" aria-label="Planted areas">
             <button type="button" aria-pressed={!selectedAreaKey} onClick={() => setSelectedAreaKey('')}>All areas</button>
             {areas.map((area) => (
@@ -1526,7 +1541,7 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = 
                 <strong>{area.count}</strong>
               </button>
             ))}
-            {locatedRows.some((row) => !yesNoToBoolean(row.is_planted)) && <span className="plantingAreaNeutral"><span className="plantingAreaSwatch" aria-hidden="true" />Not planted</span>}
+            {(unplantedPlanned.length > 0 || locatedRows.some((row) => !yesNoToBoolean(row.is_planted))) && <span className="plantingAreaNeutral"><span className="plantingAreaSwatch" style={readOnly ? { backgroundColor: '#f59e0b' } : undefined} aria-hidden="true" />Not planted</span>}
           </div>
           <div className="dashboardMapWrap">
             <MapContainer center={mapCenter} zoom={12} maxZoom={22} scrollWheelZoom className="dashboardMap" zoomControl rotate touchRotate rotateControl={{ closeOnZeroBearing: false, position: 'topright' }} bearing={0}>
@@ -1535,6 +1550,12 @@ function PolePlantingDashboard({ records, onRefresh, busy, onDelete, readOnly = 
               <MapFullscreenControl />
               <FocusPlantingArea areaKey={selectedAreaKey} rows={mapRows} />
               <FastSurveyMarkers groupedRecords={{ column_checks: mapRows }} onDelete={onDelete} canDelete={!readOnly} getMarkerAppearance={getPlantingAppearance} busy={busy} />
+              {unplantedMapRows.map((row) => {
+                const isDimmed = selectedAreaKey && plantingAreaKey(row) !== selectedAreaKey;
+                return <CircleMarker key={`planned-${row.id}`} center={[Number(row.latitude), Number(row.longitude)]} radius={5} renderer={canvasRenderer} pathOptions={{ color: '#ffffff', fillColor: '#f59e0b', fillOpacity: isDimmed ? 0.2 : 0.9, opacity: isDimmed ? 0.25 : 0.95, weight: 2 }}>
+                  <Popup><div className="markerPopup"><strong>{row.point_name || row.id}</strong><span>{row.city || '-'} · {row.district || '-'}</span><span>لم يُزرع · {row.validation_status || 'pending'}</span><span>الإحداثيات: {row.latitude}, {row.longitude}</span></div></Popup>
+                </CircleMarker>;
+              })}
             </MapContainer>
           </div>
         </article>
@@ -1917,7 +1938,7 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = 
 
        {(plannedRows.length || plannedRoutes.length || plannedAssets.length) > 0 && <section className="records designMapCard" style={{ marginBottom: 16 }}>
         <div className="recordsHeader"><div><h2>Map preview</h2><span>Poles, buildings, boxes and cable routes are shown from the uploaded design.</span></div><span>{previewRows.length} poles · {previewAssets.length} features · {previewRoutes.length} routes</span></div>
-        <div className="designPreviewMap"><EngineerMap rows={previewRows} paths={previewRoutes} assets={previewAssets} selectedId="" onSelect={() => {}} onMapClick={() => {}} /></div>
+        <div className="designPreviewMap"><EngineerMap rows={previewRows} paths={previewRoutes} assets={previewAssets} selectedId="" onSelect={() => {}} onMapClick={() => {}} fullscreenLabel /></div>
       </section>}
 
       <section className="records">
@@ -1963,7 +1984,7 @@ function engineerPointIcon(color, selected) {
   });
 }
 
-function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMapClick, onMovePoint, onDeletePlantingRecord, canDeletePlantedRecord, busy = false, addMode = false, moveMode = false, showDirectionsLink = false, showCoordinateSearch = false, fitOnlyInitially = false, viewportKey = '' }) {
+function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMapClick, onMovePoint, onDeletePlantingRecord, canDeletePlantedRecord, busy = false, addMode = false, moveMode = false, showDirectionsLink = false, showCoordinateSearch = false, fullscreenLabel = false, fitOnlyInitially = false, viewportKey = '' }) {
   const [savedViewport] = useState(() => readSavedMapViewport(viewportKey));
   const first = rows.find((row) => Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)));
   const firstPathPoint = paths.flatMap((path) => path.coordinates || [])[0];
@@ -1976,7 +1997,7 @@ function EngineerMap({ rows, paths = [], assets = [], selectedId, onSelect, onMa
       <MapLayers />
       <CurrentLocationControl />
       {showCoordinateSearch && <CoordinateSearchControl />}
-      <MapFullscreenControl />
+      <MapFullscreenControl showLabel={fullscreenLabel} />
       <MapFitToContent rows={rows} paths={paths} assets={assets} fitOnce={fitOnlyInitially} skipFit={Boolean(savedViewport)} />
       <MapViewportPersistence storageKey={viewportKey} />
       <EngineerMapClickHandler enabled={addMode} onMapClick={onMapClick} />
@@ -3850,7 +3871,7 @@ function App() {
       )}
 
       {isAdminView && adminPage === 'dashboard' && (
-        <PolePlantingDashboard records={records.column_checks} onRefresh={loadAll} busy={busy} onDelete={deleteRecord} readOnly={isManagement} />
+        <PolePlantingDashboard records={records.column_checks} plannedRows={isManagement ? plannedRows : []} onRefresh={loadAll} busy={busy} onDelete={deleteRecord} readOnly={isManagement} />
       )}
 
       {isManagement && adminPage === 'operations' && (

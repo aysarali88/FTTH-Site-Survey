@@ -1612,6 +1612,12 @@ button:disabled {
   min-height: 520px;
 }
 
+.designPreviewMap .mapExpandButton {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
 .leaflet-tooltip.kmzMapLabel {
   background: transparent;
   border: 0;
