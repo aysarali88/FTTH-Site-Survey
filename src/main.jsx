@@ -1431,16 +1431,38 @@ function PolePlantingDashboard({ records, plannedRows = [], onRefresh, busy, onD
   const cityCounts = useMemo(() => Object.fromEntries(cities), [cities]);
   const districts = useMemo(() => {
     const groups = new Map();
+    const getGroup = (city, district) => {
+      const key = `${city}|||${district}`;
+      if (!groups.has(key)) {
+        groups.set(key, { city, district, total: 0, planted: 0, notPlanted: 0, validatedNotPlanted: 0, objections: 0 });
+      }
+      return groups.get(key);
+    };
+
     filteredRows.forEach((row) => {
-      const key = `${row.city}|||${row.district || 'Not set'}`;
-      const current = groups.get(key) || { city: row.city, district: row.district || 'Not set', total: 0, planted: 0, objections: 0 };
+      const current = getGroup(row.city, row.district || 'Not set');
       current.total += 1;
       current.planted += yesNoToBoolean(row.is_planted) ? 1 : 0;
       current.objections += yesNoToBoolean(row.has_objection) ? 1 : 0;
-      groups.set(key, current);
     });
-    return [...groups.values()].sort((a, b) => b.total - a.total || a.city.localeCompare(b.city));
-  }, [filteredRows]);
+
+    if (!filters.tech && !['planted', 'objection'].includes(filters.status)) {
+      plannedRows.forEach((row) => {
+        if (row.deleted_at || row.validation_status === 'planted' || yesNoToBoolean(row.is_planted)) return;
+        if (filters.city && row.city !== filters.city) return;
+        if (filters.district && row.district !== filters.district) return;
+        const createdDate = (row.created_at || '').slice(0, 10);
+        if (filters.fromDate && createdDate < filters.fromDate) return;
+        if (filters.toDate && createdDate > filters.toDate) return;
+
+        const current = getGroup(row.city || 'Other', row.district || 'Not set');
+        current.notPlanted += 1;
+        if (row.validation_status === 'validated') current.validatedNotPlanted += 1;
+      });
+    }
+
+    return [...groups.values()].sort((a, b) => (b.total + b.notPlanted) - (a.total + a.notPlanted) || a.city.localeCompare(b.city));
+  }, [filteredRows, plannedRows, filters]);
 
   const areaColors = useMemo(() => plantingAreaColors(sourceRows), [sourceRows]);
   const locatedRows = useMemo(
@@ -1627,8 +1649,8 @@ function PolePlantingDashboard({ records, plannedRows = [], onRefresh, busy, onD
         </article>
 
         <article className="dashboardPanel districtPanel">
-          <div className="dashboardPanelHead"><div><h3>District breakdown</h3><span>City and district performance</span></div><ClipboardList size={20} /></div>
-          <div className="dashboardMiniTableWrap"><table className="dashboardMiniTable"><thead><tr><th>City</th><th>District</th><th>Total</th><th>Planted</th><th>Objections</th></tr></thead><tbody>{districts.map((item) => <tr key={`${item.city}-${item.district}`}><td>{item.city}</td><td>{item.district}</td><td>{item.total}</td><td className="successText">{item.planted}</td><td className="dangerText">{item.objections}</td></tr>)}{!districts.length && <tr><td colSpan="5" className="dashboardEmptyCell">No district data.</td></tr>}</tbody></table></div>
+          <div className="dashboardPanelHead"><div><h3>District breakdown</h3><span>Planting records and unplanted planned poles by city and district</span></div><ClipboardList size={20} /></div>
+          <div className="dashboardMiniTableWrap"><table className="dashboardMiniTable"><thead><tr><th>City</th><th>District</th><th>Total records</th><th>Planted records</th><th>Unplanted poles</th><th>Validated, not planted</th><th>Objections</th></tr></thead><tbody>{districts.map((item) => <tr key={`${item.city}-${item.district}`}><td>{item.city}</td><td>{item.district}</td><td>{item.total}</td><td className="successText">{item.planted}</td><td>{item.notPlanted}</td><td>{item.validatedNotPlanted}</td><td className="dangerText">{item.objections}</td></tr>)}{!districts.length && <tr><td colSpan="7" className="dashboardEmptyCell">No district data.</td></tr>}</tbody></table></div>
         </article>
       </div>
 
