@@ -1628,7 +1628,7 @@ function PolePlantingDashboard({ records, plannedRows = [], onRefresh, busy, onD
 
         <article className="dashboardPanel districtPanel">
           <div className="dashboardPanelHead"><div><h3>District breakdown</h3><span>City and district performance</span></div><ClipboardList size={20} /></div>
-          <div className="dashboardMiniTableWrap"><table className="dashboardMiniTable"><thead><tr><th>City</th><th>District</th><th>Total</th><th>Planted</th><th>Objections</th></tr></thead><tbody>{districts.slice(0, 12).map((item) => <tr key={`${item.city}-${item.district}`}><td>{item.city}</td><td>{item.district}</td><td>{item.total}</td><td className="successText">{item.planted}</td><td className="dangerText">{item.objections}</td></tr>)}{!districts.length && <tr><td colSpan="5" className="dashboardEmptyCell">No district data.</td></tr>}</tbody></table></div>
+          <div className="dashboardMiniTableWrap"><table className="dashboardMiniTable"><thead><tr><th>City</th><th>District</th><th>Total</th><th>Planted</th><th>Objections</th></tr></thead><tbody>{districts.map((item) => <tr key={`${item.city}-${item.district}`}><td>{item.city}</td><td>{item.district}</td><td>{item.total}</td><td className="successText">{item.planted}</td><td className="dangerText">{item.objections}</td></tr>)}{!districts.length && <tr><td colSpan="5" className="dashboardEmptyCell">No district data.</td></tr>}</tbody></table></div>
         </article>
       </div>
 
