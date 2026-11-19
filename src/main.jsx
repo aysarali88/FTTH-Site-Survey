@@ -2459,8 +2459,25 @@ function LegacyTechnicianWorkspace({ assignments, records, onAdd, onDeleteRecord
 function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], plannedAssets = [], legacyAssignments = [], legacyRecords = [], onRefresh, onLogout, onPlant, onLegacyAdd, onDeleteRecord, onSwitchToSurvey, busy }) {
   const isTechnician = profile.role === 'tech';
   const available = plannedRows.filter((row) => ['validated', 'planted'].includes(row.validation_status) && (profile.role === 'supervisor' || row.assigned_to === profile.username || row.assigned_to === profile.techName));
-  const pointsForPlanting = isTechnician ? available.filter((row) => row.validation_status === 'validated') : available;
-  const [selectedId, setSelectedId] = useState(pointsForPlanting[0]?.id || '');
+  const areaOptions = useMemo(() => {
+    const areas = new Map();
+    available.forEach((row) => {
+      const city = row.city || 'Other';
+      const district = row.district || 'Not set';
+      const key = `${city}|||${district}`;
+      const current = areas.get(key) || { key, city, district, poles: 0 };
+      current.poles += 1;
+      areas.set(key, current);
+    });
+    return [...areas.values()].sort((a, b) => a.city.localeCompare(b.city) || a.district.localeCompare(b.district));
+  }, [available]);
+  const [selectedAreaKey, setSelectedAreaKey] = useState('');
+  const selectedArea = areaOptions.find((area) => area.key === selectedAreaKey) || null;
+  const areaAvailable = isTechnician
+    ? selectedArea ? available.filter((row) => `${row.city || 'Other'}|||${row.district || 'Not set'}` === selectedArea.key) : []
+    : available;
+  const pointsForPlanting = isTechnician ? areaAvailable.filter((row) => row.validation_status === 'validated') : available;
+  const [selectedId, setSelectedId] = useState('');
   const [isPlanted, setIsPlanted] = useState('');
   const [plantingReason, setPlantingReason] = useState('');
   const [photoFile, setPhotoFile] = useState(null);
@@ -2469,6 +2486,27 @@ function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], planned
   const [workflowMode, setWorkflowMode] = useState('validated');
   const selected = pointsForPlanting.find((row) => row.id === selectedId) || null;
   const ownedPlantingRecordIds = new Set((legacyRecords || []).filter((row) => row.created_by && row.created_by === profile.userId).map((row) => row.id));
+
+  useEffect(() => {
+    if (!isTechnician) return;
+    if (areaOptions.some((area) => area.key === selectedAreaKey)) return;
+    let savedAreaKey = '';
+    try {
+      savedAreaKey = localStorage.getItem(`technician-selected-area:${profile.username || profile.techName}`) || '';
+    } catch {
+      // Fall back to the first assigned area when storage is unavailable.
+    }
+    setSelectedAreaKey(areaOptions.some((area) => area.key === savedAreaKey) ? savedAreaKey : (areaOptions[0]?.key || ''));
+  }, [isTechnician, areaOptions, selectedAreaKey, profile.username, profile.techName]);
+
+  useEffect(() => {
+    if (!isTechnician || !selectedAreaKey) return;
+    try {
+      localStorage.setItem(`technician-selected-area:${profile.username || profile.techName}`, selectedAreaKey);
+    } catch {
+      // The active area can remain a per-page preference when storage is unavailable.
+    }
+  }, [isTechnician, selectedAreaKey, profile.username, profile.techName]);
 
   useEffect(() => {
     if (!selected) setSelectedId(pointsForPlanting[0]?.id || '');
@@ -2525,7 +2563,18 @@ function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], planned
       </button>}
       {isTechnician && workflowMode === 'legacy' ? <LegacyTechnicianWorkspace profile={profile} assignments={legacyAssignments} records={legacyRecords} onAdd={onLegacyAdd} onDeleteRecord={onDeleteRecord} onSwitchMode={() => setWorkflowMode('validated')} onSwitchToSurvey={onSwitchToSurvey} busy={busy} /> : <>
       <section className="workspace">
-      <div className="mapShell" style={{ minHeight: 650 }}><EngineerMap rows={available} paths={isTechnician ? [] : plannedRoutes} assets={isTechnician ? [] : plannedAssets} selectedId={selectedId} onSelect={(id) => { if (pointsForPlanting.some((row) => row.id === id)) setSelectedId(id); }} onMapClick={() => {}} onDeletePlantingRecord={(row) => onDeleteRecord?.('column_checks', row.planted_record_id)} canDeletePlantedRecord={(row) => isTechnician && ownedPlantingRecordIds.has(row.planted_record_id)} busy={busy} showDirectionsLink={isTechnician} /><div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div></div>
+      <div className="mapShell" style={{ minHeight: 650 }}>
+        {isTechnician && <div className="technicianAreaSelector">
+          <label htmlFor="technician-work-area">اختر المنطقة</label>
+          <select id="technician-work-area" aria-label="اختر المنطقة" value={selectedAreaKey} onChange={(event) => setSelectedAreaKey(event.target.value)} disabled={!areaOptions.length}>
+            {!areaOptions.length && <option value="">لا توجد مناطق مخصصة</option>}
+            {areaOptions.map((area) => <option key={area.key} value={area.key}>{area.district} · {area.city} ({area.poles})</option>)}
+          </select>
+          {selectedArea && <span>{areaAvailable.length} أعمدة في المنطقة · {pointsForPlanting.length} بانتظار الزراعة</span>}
+        </div>}
+        <EngineerMap rows={areaAvailable} paths={isTechnician ? [] : plannedRoutes} assets={isTechnician ? [] : plannedAssets} selectedId={selectedId} onSelect={(id) => { if (pointsForPlanting.some((row) => row.id === id)) setSelectedId(id); }} onMapClick={() => {}} onDeletePlantingRecord={(row) => onDeleteRecord?.('column_checks', row.planted_record_id)} canDeletePlantedRecord={(row) => isTechnician && ownedPlantingRecordIds.has(row.planted_record_id)} busy={busy} showDirectionsLink={isTechnician} />
+        <div className="fixedPin" aria-hidden="true"><MapPin size={36} /></div><div className="limitBadge">الأزرق: معتمد · الأخضر: تمت زراعته</div>
+      </div>
       <section id="supervisor-controls" className={`records panel supervisorControls ${controlsOpen ? 'open' : ''}`} style={{ padding: 20 }}>
         {isTechnician && <div className="mobileWorkflowTabs">
           <button type="button" onClick={() => onSwitchToSurvey('buildings')}>البنايات</button>
@@ -2545,7 +2594,7 @@ function SupervisorWorkspace({ profile, plannedRows, plannedRoutes = [], planned
         {!pointsForPlanting.length && <div className="empty" style={{ marginTop: 20 }}>{isTechnician ? 'لا توجد أعمدة معتمدة بانتظار الزراعة.' : 'لا توجد نقاط معتمدة من المهندس حتى الآن.'}</div>}
       </section>
       </section>
-      <section className="records" style={{ marginTop: 16 }}><div className="recordsHeader"><h2>Point list</h2><span>{pointsForPlanting.length} points</span></div><div className="tableWrap"><table><thead><tr><th>ID</th><th>City</th><th>District</th><th>Status</th></tr></thead><tbody>{pointsForPlanting.slice(0, 500).map((row) => <tr key={row.id} onClick={() => setSelectedId(row.id)}><td>{row.id}</td><td>{row.city || '-'}</td><td>{row.district || '-'}</td><td>{row.validation_status}</td></tr>)}</tbody></table></div></section>
+      <section className="records" style={{ marginTop: 16 }}><div className="recordsHeader"><h2>Point list</h2><span>{pointsForPlanting.length} points</span></div><div className="tableWrap"><table><thead><tr><th>ID</th><th>City</th><th>District</th><th>Status</th></tr></thead><tbody>{pointsForPlanting.slice(0, 500).map((row) => <tr key={row.id} onClick={() => setSelectedId(row.id)}><td>{row.id}</td><td>{row.city || '-'}</td><td>{row.district || '-'}</td><td>{row.validation_status}</td></tr>)}{!pointsForPlanting.length && <tr><td colSpan="4" className="empty">{isTechnician ? 'لا توجد أعمدة معتمدة في المنطقة المحددة.' : 'No points available.'}</td></tr>}</tbody></table></div></section>
       </>}
     </main>
   );
