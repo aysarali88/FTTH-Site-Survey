@@ -51,7 +51,7 @@ const MAX_IMPORTED_ASSETS_TO_RENDER = 3500;
 const MAX_TABLE_ROWS = 500;
 const CITY_DISTRICTS = {
   Misrata: ['مقاوبه', 'ولاد بعيو', 'راس عمار', 'البيره والتعليم', 'راس التوته', 'راس علي', 'المنقوش', 'ولاد ابو شعاله', 'رويسات', 'مقاصبه'],
-  Tripoli: ['المنصوره', 'حي الاندلس 1', 'حي الاندلس 2', 'حي الاندلس 3', 'شارع الظل', 'نوفلين'],
+  Tripoli: ['المنصوره', 'حي الاندلس 1', 'حي الاندلس 2', 'حي الاندلس 3', 'شارع الظل', 'نوفلين', 'Zawyah Dahmani', 'Bonaem'],
 };
 const LEGACY_AREA_OPTIONS = [
   { city: 'Misrata', district: 'راس عمار' },
@@ -1890,7 +1890,13 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = 
   );
   const previewRows = plannedRows.slice(0, MAX_MAP_MARKERS);
   const previewAssets = plannedAssets.slice(0, MAX_IMPORTED_ASSETS_TO_RENDER);
-  const districtOptions = CITY_DISTRICTS[city] || [];
+  const districtOptions = useMemo(() => {
+    const importedDistricts = [...plannedRows, ...plannedRoutes, ...plannedAssets]
+      .filter((row) => row.city === city && row.district)
+      .map((row) => String(row.district).trim())
+      .filter(Boolean);
+    return [...new Set([...(CITY_DISTRICTS[city] || []), ...importedDistricts])].sort((a, b) => a.localeCompare(b));
+  }, [city, plannedRows, plannedRoutes, plannedAssets]);
   const batches = useMemo(() => {
     const grouped = new Map();
     [...plannedRows, ...plannedRoutes, ...plannedAssets].forEach((row) => {
@@ -1993,7 +1999,7 @@ function DesignWorkspace({ profile, plannedRows, plannedRoutes, plannedAssets = 
         <div className="recordsHeader"><div><h2>Upload KMZ plan</h2><span>New poles go to validation; other design features stay as map references.</span></div></div>
         <div className="fieldGrid" style={{ marginTop: 14 }}>
           <label>City<select value={city} onChange={(event) => { setCity(event.target.value); setDistrict(''); }}><option value="Misrata">Misrata</option><option value="Tripoli">Tripoli</option></select></label>
-          <label>District<select required value={district} onChange={(event) => setDistrict(event.target.value)}><option value="">Choose district...</option>{districtOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+          <label>District<input required list="design-district-options" value={district} onChange={(event) => setDistrict(event.target.value)} placeholder="Choose or add a district" autoComplete="off" /><datalist id="design-district-options">{districtOptions.map((option) => <option key={option} value={option} />)}</datalist><span className="fieldHint">Choose a listed area or enter a new one. The name is saved with the uploaded KMZ / KML area.</span></label>
         </div>
         <label className="ghost fileButton" style={{ marginTop: 14, display: 'inline-flex' }}>
           <Upload size={18} /> {busy ? 'Uploading...' : 'Choose KMZ / KML'}

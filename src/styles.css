@@ -2201,6 +2201,13 @@ button:disabled {
   margin-top: 12px;
 }
 
+.fieldHint {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
 label {
   color: #334155;
   display: grid;
