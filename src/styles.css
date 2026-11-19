@@ -3456,6 +3456,15 @@ td {
 }
 
 .adminMode .designPreviewMap.expandedMap {
+  height: 100dvh;
+  max-height: none;
+  min-height: 100dvh;
   position: fixed !important;
   z-index: 8000 !important;
+}
+
+.adminMode .designPreviewMap.expandedMap > .map {
+  height: 100% !important;
+  min-height: 100% !important;
+  width: 100% !important;
 }
