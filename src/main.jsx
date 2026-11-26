@@ -2781,8 +2781,9 @@ function App() {
     () => Object.entries(scopedRecords).flatMap(([type, rows]) => rows.map((row) => ({ ...row, _type: type }))),
     [scopedRecords],
   );
+  const filterMapByActiveLayer = isFieldSurveyMode || (isAdmin && adminPage === 'data');
   const mapRecords = useMemo(() => {
-    const sourceRecords = isFieldSurveyMode
+    const sourceRecords = filterMapByActiveLayer
       ? Object.fromEntries(Object.keys(scopedRecords).map((type) => [type, type === active ? scopedRecords[type] || [] : []]))
       : scopedRecords;
     let remaining = MAX_MAP_MARKERS;
@@ -2793,13 +2794,13 @@ function App() {
         return [type, limitedRows];
       }),
     );
-  }, [scopedRecords, isFieldSurveyMode, active]);
+  }, [scopedRecords, filterMapByActiveLayer, active]);
   const mapMarkerCount = useMemo(
     () => Object.values(mapRecords).reduce((sum, rows) => sum + rows.length, 0),
     [mapRecords],
   );
-  const mapSourceCount = isFieldSurveyMode
-    ? (['buildings', 'poles'].includes(active) ? scopedRecords[active].length : 0)
+  const mapSourceCount = filterMapByActiveLayer
+    ? (scopedRecords[active] || []).length
     : allVisibleRows.length;
   const hiddenMapMarkers = Math.max(mapSourceCount - mapMarkerCount, 0);
   const visiblePhotos = useMemo(
