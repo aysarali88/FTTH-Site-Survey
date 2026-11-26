@@ -2782,22 +2782,24 @@ function App() {
     [scopedRecords],
   );
   const mapRecords = useMemo(() => {
+    const sourceRecords = isFieldSurveyMode
+      ? Object.fromEntries(Object.keys(scopedRecords).map((type) => [type, type === active ? scopedRecords[type] || [] : []]))
+      : scopedRecords;
     let remaining = MAX_MAP_MARKERS;
     return Object.fromEntries(
-      Object.entries(scopedRecords).map(([type, rows]) => {
-        if (isFieldSurveyMode && type === 'column_checks') return [type, []];
+      Object.entries(sourceRecords).map(([type, rows]) => {
         const limitedRows = rows.slice(0, Math.max(remaining, 0));
         remaining -= limitedRows.length;
         return [type, limitedRows];
       }),
     );
-  }, [scopedRecords, isFieldSurveyMode]);
+  }, [scopedRecords, isFieldSurveyMode, active]);
   const mapMarkerCount = useMemo(
     () => Object.values(mapRecords).reduce((sum, rows) => sum + rows.length, 0),
     [mapRecords],
   );
   const mapSourceCount = isFieldSurveyMode
-    ? scopedRecords.buildings.length + scopedRecords.poles.length
+    ? (['buildings', 'poles'].includes(active) ? scopedRecords[active].length : 0)
     : allVisibleRows.length;
   const hiddenMapMarkers = Math.max(mapSourceCount - mapMarkerCount, 0);
   const visiblePhotos = useMemo(
