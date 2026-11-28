@@ -4062,8 +4062,6 @@ function App() {
         </section>
       )}
 
-      {isAdmin && adminPage === 'data' && <WorkflowQueue plannedRows={plannedRows} technicians={technicianOptions} onAssign={assignPlannedPole} onRefresh={loadAll} busy={busy} />}
-
       {(!isAdminView || (isAdmin && adminPage === 'data')) && <nav className="tabs" aria-label="Survey sections">
         {(isFieldSurveyMode ? Object.entries(resources).filter(([key]) => ['buildings', 'poles'].includes(key)) : isTechnician ? Object.entries(resources).filter(([key]) => key === 'column_checks') : Object.entries(resources)).map(([key, item]) => (
           <button
